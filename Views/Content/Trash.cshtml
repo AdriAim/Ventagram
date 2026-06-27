@@ -1,0 +1,42 @@
+@model TrashContentViewModel
+
+<section class="form-shell">
+    <div class="section-heading">
+        <span class="eyebrow">Papelera</span>
+        <h1>Anuncios enviados por la comunidad</h1>
+        <p>Acá aparecen las publicaciones denunciadas. Si un aviso fue marcado por no corresponder, fraude o falta de precio, se ve acá con su historial básico.</p>
+    </div>
+
+    @if (!Model.Publications.Any())
+    {
+        <section class="empty-state">
+            <h2>La papelera está vacía.</h2>
+            <p>Todavía no hay publicaciones denunciadas por la comunidad.</p>
+        </section>
+    }
+    else
+    {
+        <section class="classified-list">
+            @foreach (var item in Model.Publications)
+            {
+                <article class="classified-row">
+                    <div>
+                        <span class="card-meta">@item.Group · @item.Category · @item.Locality</span>
+                        <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
+                        <p>@item.ShortDescription</p>
+                        <div class="trash-tags">
+                            @foreach (var reason in item.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason))
+                            {
+                                <span class="trash-tag">@reason</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="classified-side">
+                        <strong>@item.Reports.Count denuncia(s)</strong>
+                        <span>@item.Currency @item.Price.ToString("N0")</span>
+                    </div>
+                </article>
+            }
+        </section>
+    }
+</section>

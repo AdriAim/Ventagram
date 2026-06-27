@@ -1,0 +1,156 @@
+@model CreatePublicationContentViewModel
+
+<section class="form-shell">
+    <div class="section-heading">
+        <span class="eyebrow">Paso a paso</span>
+        <h1>Crear publicación</h1>
+        <p>Elegí rubro, cargá los datos obligatorios y completá los opcionales relevantes.</p>
+    </div>
+
+    <div id="create-feedback"></div>
+
+    <form id="createPublicationForm" class="stack-form">
+        <section class="detail-panel">
+            <h2>Modo de publicación</h2>
+            <div class="radio-grid">
+                <label class="choice-tile"><input name="publisherMode" type="radio" value="Account" checked="@(Model.Input.PublisherMode == "Account")" /> <span>Crear usuario</span></label>
+                <label class="choice-tile"><input name="publisherMode" type="radio" value="Google" checked="@(Model.Input.PublisherMode == "Google")" /> <span>Cuenta con Gmail</span></label>
+                <label class="choice-tile"><input name="publisherMode" type="radio" value="Anonymous" checked="@(Model.Input.PublisherMode == "Anonymous")" /> <span>Publicación anónima</span></label>
+            </div>
+
+            <div class="publisher-panel" data-publisher-panel="Account">
+                <div class="form-grid">
+                    <label><span>Nombre</span><input name="accountName" /></label>
+                    <label><span>Email</span><input name="accountEmail" /></label>
+                    <label><span>Teléfono</span><input name="accountPhone" /></label>
+                    <label><span>Contraseña</span><input name="accountPassword" type="password" /></label>
+                </div>
+            </div>
+
+            <div class="publisher-panel" data-publisher-panel="Google">
+                <div class="inline-callout">
+                    @if (Model.IsAuthenticated)
+                    {
+                        <p>Sesión activa con <strong>@Model.CurrentUserName</strong>. La publicación se asociará a esa cuenta.</p>
+                    }
+                    else if (Model.IsGoogleEnabled)
+                    {
+                        <div class="hero-actions">
+                            <a class="primary-pill" href="/Account/Login?returnUrl=/Publications/Create">Ingresar con Google</a>
+                            <a class="ghost-pill" href="/Account/Login?returnUrl=/Publications/Create">Ingresar con email</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <p>Google está preparado, pero falta configurar <code>Authentication:Google:ClientId</code> y <code>ClientSecret</code>.</p>
+                    }
+                </div>
+            </div>
+
+            <div class="publisher-panel" data-publisher-panel="Anonymous">
+                <div class="form-grid">
+                    <label><span>Nombre</span><input name="contactName" value="@Model.Input.ContactName" /></label>
+                    <label><span>Teléfono</span><input name="contactPhone" value="@Model.Input.ContactPhone" /></label>
+                </div>
+            </div>
+        </section>
+
+        <section class="detail-panel">
+            <h2>Paso 1. Datos obligatorios</h2>
+            <div class="form-grid">
+                <label><span>Grupo</span><select name="group"><option selected="@(Model.Input.Group=="Inmuebles")">Inmuebles</option><option selected="@(Model.Input.Group=="Rodados")">Rodados</option><option selected="@(Model.Input.Group=="Generales")">Generales</option></select></label>
+                <label><span>Categoría</span><input name="category" value="@Model.Input.Category" /></label>
+                <label><span>Título</span><input name="title" value="@Model.Input.Title" /></label>
+                <label><span>Precio</span><input name="price" value="@Model.Input.Price" type="number" step="0.01" /></label>
+                <label><span>Moneda</span><select name="currency"><option selected="@(Model.Input.Currency=="USD")">USD</option><option selected="@(Model.Input.Currency=="ARS")">ARS</option></select></label>
+                <label><span>Localidad</span><input name="locality" value="@Model.Input.Locality" /></label>
+                <label class="wide"><span>Descripción corta</span><input name="shortDescription" value="@Model.Input.ShortDescription" /></label>
+                <label class="wide"><span>Imágenes</span><input name="imagesCsv" value="@Model.Input.ImagesCsv" placeholder="URL1,URL2,URL3" /></label>
+            </div>
+        </section>
+
+        <section class="detail-panel">
+            <h2>Paso 2. Opcionales según rubro</h2>
+            <div class="form-grid">
+                <label class="wide"><span>Descripción larga</span><textarea name="longDescription">@Model.Input.LongDescription</textarea></label>
+                <label><span>Email de contacto</span><input name="contactEmail" value="@Model.Input.ContactEmail" /></label>
+                <label><span>Video URL</span><input name="videoUrl" value="@Model.Input.VideoUrl" /></label>
+                <label><span>Latitud</span><input name="latitude" value="@Model.Input.Latitude" /></label>
+                <label><span>Longitud</span><input name="longitude" value="@Model.Input.Longitude" /></label>
+                <label class="checkline"><input name="featured" type="checkbox" checked="@Model.Input.Featured" /> <span>Destacada</span></label>
+            </div>
+
+            <div class="group-panel" data-group-panel="Inmuebles">
+                <div class="form-grid">
+                    <label><span>Tipo inmueble</span><input name="propertyType" value="@Model.Input.PropertyType" /></label>
+                    <label><span>Operación</span><input name="operation" value="@Model.Input.Operation" /></label>
+                    <label><span>Zona</span><input name="zone" value="@Model.Input.Zone" /></label>
+                    <label><span>Superficie total m²</span><input name="totalAreaM2" value="@Model.Input.TotalAreaM2" /></label>
+                    <label><span>Superficie cubierta m²</span><input name="coveredAreaM2" value="@Model.Input.CoveredAreaM2" /></label>
+                    <label><span>Ambientes / dormitorios</span><input name="roomsOrBedrooms" value="@Model.Input.RoomsOrBedrooms" /></label>
+                    <label><span>Baños</span><input name="bathrooms" value="@Model.Input.Bathrooms" /></label>
+                    <label><span>Cocheras</span><input name="garageSpaces" value="@Model.Input.GarageSpaces" /></label>
+                    <label><span>Antigüedad</span><input name="ageYears" value="@Model.Input.AgeYears" /></label>
+                    <label><span>Expensas</span><input name="expenses" value="@Model.Input.Expenses" /></label>
+                    <label><span>Dirección</span><input name="address" value="@Model.Input.Address" /></label>
+                    <label><span>Estado conservación</span><input name="condition" value="@Model.Input.Condition" /></label>
+                    <label class="wide"><span>Servicios</span><input name="services" value="@Model.Input.Services" /></label>
+                    <label class="wide"><span>Amenities</span><input name="amenities" value="@Model.Input.Amenities" /></label>
+                    <label class="checkline"><input name="mortgageEligible" type="checkbox" checked="@Model.Input.MortgageEligible" /> <span>Apto crédito</span></label>
+                    <label class="checkline"><input name="professionalUseAllowed" type="checkbox" checked="@Model.Input.ProfessionalUseAllowed" /> <span>Apto profesional</span></label>
+                </div>
+            </div>
+
+            <div class="group-panel" data-group-panel="Rodados">
+                <div class="form-grid">
+                    <label><span>Tipo rodado</span><input name="vehicleType" value="@Model.Input.VehicleType" /></label>
+                    <label><span>Marca</span><input name="brand" value="@Model.Input.Brand" /></label>
+                    <label><span>Modelo</span><input name="model" value="@Model.Input.Model" /></label>
+                    <label><span>Año</span><input name="year" value="@Model.Input.Year" /></label>
+                    <label><span>Kilómetros</span><input name="kilometers" value="@Model.Input.Kilometers" /></label>
+                    <label><span>Combustible</span><input name="fuel" value="@Model.Input.Fuel" /></label>
+                    <label><span>Transmisión</span><input name="transmission" value="@Model.Input.Transmission" /></label>
+                    <label><span>Versión</span><input name="version" value="@Model.Input.Version" /></label>
+                    <label><span>Color</span><input name="color" value="@Model.Input.Color" /></label>
+                    <label><span>Patente</span><input name="licensePlate" value="@Model.Input.LicensePlate" /></label>
+                    <label><span>Motor</span><input name="engine" value="@Model.Input.Engine" /></label>
+                    <label><span>Tracción</span><input name="traction" value="@Model.Input.Traction" /></label>
+                    <label><span>Puertas</span><input name="doors" value="@Model.Input.Doors" /></label>
+                    <label><span>Titulares</span><input name="ownersCount" value="@Model.Input.OwnersCount" /></label>
+                    <label class="wide"><span>Equipamiento</span><input name="equipment" value="@Model.Input.Equipment" /></label>
+                    <label><span>Estado general</span><input name="generalCondition" value="@Model.Input.GeneralCondition" /></label>
+                    <label class="checkline"><input name="acceptsTrade" type="checkbox" checked="@Model.Input.AcceptsTrade" /> <span>Permuta</span></label>
+                    <label class="checkline"><input name="financingAvailable" type="checkbox" checked="@Model.Input.FinancingAvailable" /> <span>Financiación</span></label>
+                </div>
+            </div>
+
+            <div class="group-panel" data-group-panel="Generales">
+                <div class="form-grid">
+                    <label><span>Subcategoría</span><input name="subcategory" value="@Model.Input.Subcategory" /></label>
+                    <label><span>Estado artículo</span><input name="itemCondition" value="@Model.Input.ItemCondition" /></label>
+                    <label><span>Marca</span><input name="brand" value="@Model.Input.Brand" /></label>
+                    <label><span>Modelo</span><input name="model" value="@Model.Input.Model" /></label>
+                    <label><span>SKU</span><input name="sku" value="@Model.Input.Sku" /></label>
+                    <label><span>Stock</span><input name="stock" value="@Model.Input.Stock" /></label>
+                    <label><span>Color</span><input name="color" value="@Model.Input.Color" /></label>
+                    <label><span>Medida</span><input name="measure" value="@Model.Input.Measure" /></label>
+                    <label><span>Peso</span><input name="weight" value="@Model.Input.Weight" /></label>
+                    <label><span>Dimensiones</span><input name="dimensions" value="@Model.Input.Dimensions" /></label>
+                    <label><span>Garantía</span><input name="warranty" value="@Model.Input.Warranty" /></label>
+                    <label><span>Envío</span><input name="shipping" value="@Model.Input.Shipping" /></label>
+                    <label class="checkline"><input name="acceptsTrade" type="checkbox" checked="@Model.Input.AcceptsTrade" /> <span>Permuta</span></label>
+                </div>
+            </div>
+        </section>
+
+        <section class="detail-panel">
+            <h2>Paso 3. Atributos extra</h2>
+            <label><span>Uno por línea, formato <code>clave: valor</code></span><textarea name="extraAttributesRaw" placeholder="Memoria: 128 GB&#10;Batería: 88%">@Model.Input.ExtraAttributesRaw</textarea></label>
+        </section>
+
+        <div class="hero-actions">
+            <button type="submit" class="primary-pill">Crear publicación</button>
+            <a class="ghost-pill" href="/">Cancelar</a>
+        </div>
+    </form>
+</section>

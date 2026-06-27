@@ -1,0 +1,12 @@
+.vs/
+bin/
+obj/
+
+*.user
+*.suo
+
+appsettings.Development.json
+
+node_modules/
+dist/
+coverage/

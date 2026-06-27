@@ -1,0 +1,7 @@
+@page "{id:int}"
+@model Ubika.Pages.Publications.DetailsModel
+@{
+    ViewData["Title"] = "Detalle";
+}
+
+<div id="api-page" data-page-kind="details" data-api-endpoint="/api/content/details/@Model.Id"></div>

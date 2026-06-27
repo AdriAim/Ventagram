@@ -1,0 +1,34 @@
+@page
+@model Ubika.Pages.Account.RegisterModel
+@{
+    ViewData["Title"] = "Crear cuenta";
+}
+
+<section class="form-shell narrow">
+    <div class="section-heading">
+        <span class="eyebrow">Cuenta nueva</span>
+        <h1>Crear usuario</h1>
+        <p>Se acepta cualquier email válido. Pedimos nombre, teléfono y contraseña.</p>
+    </div>
+
+    <form method="post" class="stack-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="form-grid">
+            <label><span>Nombre</span><input asp-for="Input.Name" /></label>
+            <label><span>Email</span><input asp-for="Input.Email" /></label>
+            <label><span>Teléfono</span><input asp-for="Input.Phone" /></label>
+            <label><span>Contraseña</span><input asp-for="Input.Password" type="password" /></label>
+        </div>
+        <div class="hero-actions">
+            <button type="submit" class="primary-pill">Crear cuenta</button>
+            @if (Model.IsGoogleEnabled)
+            {
+                <button type="submit" asp-page-handler="Google" class="ghost-pill">Usar Gmail</button>
+            }
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

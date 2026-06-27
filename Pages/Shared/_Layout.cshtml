@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Ubika</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Ubika.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="page-backdrop"></div>
+    <header class="site-header">
+        <nav class="site-nav">
+            <a class="brand-lockup" asp-page="/Index">
+                <span class="brand-dot"></span>
+                <span>Ubika</span>
+            </a>
+            <div class="nav-links">
+                <a asp-page="/Index">Explorar</a>
+                <a asp-page="/Publications/Create">Publicar</a>
+                <a asp-page="/Trash">Papelera</a>
+                <a asp-page="/Publications/DeleteAnonymous">Baja anónima</a>
+            </div>
+            <div class="nav-actions">
+                @if (User.Identity?.IsAuthenticated ?? false)
+                {
+                    <span class="user-badge">@User.Identity!.Name</span>
+                    <form method="post" asp-page="/Account/Logout">
+                        <button type="submit" class="ghost-pill compact">Salir</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="ghost-pill compact" asp-page="/Account/Login">Ingresar</a>
+                    <a class="primary-pill compact" asp-page="/Account/Register">Crear cuenta</a>
+                }
+            </div>
+        </nav>
+    </header>
+    <main class="page-shell">
+        @RenderBody()
+    </main>
+    <footer class="site-footer">
+        <div>
+            <strong>Ubika</strong>
+            <p>Basta de anuncios sin precios. La comunidad denuncia, vota y manda avisos a la papelera.</p>
+        </div>
+        <div class="footer-links">
+            <a asp-page="/Index">Inicio</a>
+            <a asp-page="/Publications/Create">Publicar</a>
+            <a asp-page="/Trash">Papelera</a>
+            <a asp-page="/Privacy">Privacidad</a>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

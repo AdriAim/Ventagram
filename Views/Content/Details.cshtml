@@ -1,0 +1,87 @@
+@model PublicationDetailsContentViewModel
+
+@if (Model.Publication is null)
+{
+    <section class="empty-state">
+        <h1>Publicación no encontrada</h1>
+        <p>Es posible que haya vencido o sido dada de baja.</p>
+    </section>
+}
+else
+{
+    <section class="detail-hero">
+        <div>
+            <span class="eyebrow">@Model.Publication.Group · @Model.Publication.Category</span>
+            <h1>@Model.Publication.Title</h1>
+            <p>@Model.Publication.ShortDescription</p>
+        </div>
+        <div class="price-panel">
+            <strong>@Model.Publication.Currency @Model.Publication.Price.ToString("N0")</strong>
+            <span>@Model.Publication.Locality</span>
+            <span>@Model.Publication.ContactName · @Model.Publication.ContactPhone</span>
+        </div>
+    </section>
+
+    <section class="detail-grid">
+        <div class="detail-gallery">
+            @foreach (var image in Model.Publication.ImageList)
+            {
+                <img src="@image" alt="@Model.Publication.Title" />
+            }
+        </div>
+        <aside class="detail-panel">
+            <h2>Contacto</h2>
+            <p><strong>@Model.Publication.ContactName</strong></p>
+            <p>@Model.Publication.ContactPhone</p>
+            @if (!string.IsNullOrWhiteSpace(Model.Publication.ContactEmail))
+            {
+                <p>@Model.Publication.ContactEmail</p>
+            }
+            @if (Model.Publication.ExpiresAtUtc.HasValue)
+            {
+                <p>Vence: @Model.Publication.ExpiresAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</p>
+            }
+        </aside>
+    </section>
+
+    <section class="detail-grid two">
+        <article class="detail-panel">
+            <h2>Descripción</h2>
+            <p>@Model.Publication.LongDescription</p>
+        </article>
+        <article class="detail-panel">
+            <h2>Ficha técnica</h2>
+            <dl class="spec-list">
+                @if (Model.Publication.PropertyDetail is not null)
+                {
+                    <dt>Tipo</dt><dd>@Model.Publication.PropertyDetail.PropertyType</dd>
+                    <dt>Operación</dt><dd>@Model.Publication.PropertyDetail.Operation</dd>
+                    <dt>Zona</dt><dd>@Model.Publication.PropertyDetail.Zone</dd>
+                    <dt>Superficie</dt><dd>@Model.Publication.PropertyDetail.TotalAreaM2 m²</dd>
+                    <dt>Ambientes</dt><dd>@Model.Publication.PropertyDetail.RoomsOrBedrooms</dd>
+                }
+                else if (Model.Publication.VehicleDetail is not null)
+                {
+                    <dt>Marca</dt><dd>@Model.Publication.VehicleDetail.Brand</dd>
+                    <dt>Modelo</dt><dd>@Model.Publication.VehicleDetail.Model</dd>
+                    <dt>Año</dt><dd>@Model.Publication.VehicleDetail.Year</dd>
+                    <dt>Kilómetros</dt><dd>@Model.Publication.VehicleDetail.Kilometers</dd>
+                    <dt>Combustible</dt><dd>@Model.Publication.VehicleDetail.Fuel</dd>
+                }
+                else if (Model.Publication.GeneralDetail is not null)
+                {
+                    <dt>Subcategoría</dt><dd>@Model.Publication.GeneralDetail.Subcategory</dd>
+                    <dt>Estado</dt><dd>@Model.Publication.GeneralDetail.ItemCondition</dd>
+                    <dt>Marca</dt><dd>@Model.Publication.GeneralDetail.Brand</dd>
+                    <dt>Modelo</dt><dd>@Model.Publication.GeneralDetail.Model</dd>
+                    <dt>Garantía</dt><dd>@Model.Publication.GeneralDetail.Warranty</dd>
+                }
+
+                @foreach (var attr in Model.Publication.ExtraAttributes)
+                {
+                    <dt>@attr.Key</dt><dd>@attr.Value</dd>
+                }
+            </dl>
+        </article>
+    </section>
+}

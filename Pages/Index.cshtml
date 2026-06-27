@@ -1,0 +1,47 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Encontrá inmuebles, rodados y publicaciones";
+    var endpoint = $"/api/content/home?group={Uri.EscapeDataString(Model.Group)}&mode={Uri.EscapeDataString(Model.Mode)}&query={Uri.EscapeDataString(Model.Query ?? string.Empty)}";
+}
+
+<div id="api-page"
+     data-page-kind="home"
+     data-api-endpoint="@endpoint"
+     data-maptiler-key="@Model.MapTilerKey">
+</div>
+
+<div class="modal fade" id="reportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content ubika-modal">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">Denunciar publicación</span>
+                    <h5 class="modal-title" id="reportModalTitle">Seleccioná un motivo</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="reportForm">
+                <div class="modal-body">
+                    <input type="hidden" name="publicationId" value="0" />
+                    <label class="report-choice">
+                        <input name="reason" type="radio" value="No corresponde" checked />
+                        <span>No corresponde</span>
+                    </label>
+                    <label class="report-choice">
+                        <input name="reason" type="radio" value="Fraude" />
+                        <span>Fraude</span>
+                    </label>
+                    <label class="report-choice">
+                        <input name="reason" type="radio" value="Sin precio" />
+                        <span>Sin precio</span>
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="ghost-pill" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="primary-pill">Enviar denuncia</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

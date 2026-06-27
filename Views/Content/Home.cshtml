@@ -1,0 +1,145 @@
+@model HomeContentViewModel
+@{
+    var currentMode = string.IsNullOrWhiteSpace(Model.Mode) ? "Galeria" : Model.Mode;
+    var currentGroup = string.IsNullOrWhiteSpace(Model.Group) ? "Inmuebles" : Model.Group;
+}
+
+<section class="hero-shell">
+    <div class="hero-copy">
+        <span class="eyebrow">Ubika en comunidad</span>
+        <h1>Basta de <span>anuncios sin precios</span>.</h1>
+        <p>En Ubika lo regulamos entre todos: denunciá, votá y enviá los avisos flojos a la papelera comunitaria.</p>
+    </div>
+    <div class="hero-actions">
+        <a class="primary-pill" href="/Publications/Create">Publicar ahora</a>
+        <a class="ghost-pill" href="/Trash">Ver papelera</a>
+    </div>
+</section>
+
+<section class="status-banner civic-banner">
+    <strong>La comunidad decide.</strong>
+    <span>Los anuncios denunciados aparecen en la papelera para que todos vean qué publicaciones fueron marcadas.</span>
+</section>
+
+<section class="search-panel">
+    <form method="get" action="/" class="search-grid">
+        <label>
+            <span>Qué buscás</span>
+            <input name="query" value="@Model.Query" placeholder="Ej. departamento, Ford Fiesta, iPhone" />
+        </label>
+        <label>
+            <span>Grupo</span>
+            <select name="group">
+                <option selected="@(currentGroup == "Inmuebles")">Inmuebles</option>
+                <option selected="@(currentGroup == "Rodados")">Rodados</option>
+                <option selected="@(currentGroup == "Generales")">Generales</option>
+            </select>
+        </label>
+        <label>
+            <span>Vista</span>
+            <select name="mode">
+                <option selected="@(currentMode == "Mapa")">Mapa</option>
+                <option selected="@(currentMode == "Texto")">Texto</option>
+                <option selected="@(currentMode == "Galeria")">Galeria</option>
+            </select>
+        </label>
+        <button type="submit" class="primary-pill large">Buscar</button>
+    </form>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.FlashMessage))
+{
+    <div class="status-banner">@Model.FlashMessage</div>
+}
+
+<section class="group-strip">
+    <a class="group-chip @(currentGroup == "Inmuebles" ? "active" : "")" href="/?group=Inmuebles&mode=@currentMode&query=@Model.Query">Inmuebles</a>
+    <a class="group-chip @(currentGroup == "Rodados" ? "active" : "")" href="/?group=Rodados&mode=@currentMode&query=@Model.Query">Rodados</a>
+    <a class="group-chip @(currentGroup == "Generales" ? "active" : "")" href="/?group=Generales&mode=@currentMode&query=@Model.Query">Generales</a>
+</section>
+
+<section class="view-switch">
+    <a class="view-pill @(currentMode == "Mapa" ? "active" : "")" href="/?group=@currentGroup&mode=Mapa&query=@Model.Query">Mapa</a>
+    <a class="view-pill @(currentMode == "Texto" ? "active" : "")" href="/?group=@currentGroup&mode=Texto&query=@Model.Query">Clasificado</a>
+    <a class="view-pill @(currentMode == "Galeria" ? "active" : "")" href="/?group=@currentGroup&mode=Galeria&query=@Model.Query">Galería</a>
+</section>
+
+@if (!Model.Publications.Any())
+{
+    <section class="empty-state">
+        <h2>No hay resultados para esa búsqueda.</h2>
+        <p>Ajustá el grupo o la palabra clave para ver publicaciones activas.</p>
+    </section>
+}
+else if (currentMode == "Mapa")
+{
+    <section class="map-layout">
+        <div class="map-canvas" id="map"
+             data-maptiler-key="@Model.MapTilerKey"
+             data-markers='@Model.MarkersJson'>
+            @if (string.IsNullOrWhiteSpace(Model.MapTilerKey))
+            {
+                <div class="map-placeholder">
+                    <h2>Mapa listo para MapTiler</h2>
+                    <p>Cargá <code>MapTiler:ApiKey</code> en <code>appsettings.json</code> para activar el mapa interactivo.</p>
+                </div>
+            }
+        </div>
+        <div class="map-results">
+            @foreach (var item in Model.Publications)
+            {
+                <article class="map-card">
+                    <img src="@item.ImageList.FirstOrDefault()" alt="@item.Title" />
+                    <div>
+                        <span class="card-meta">@item.Category · @item.Locality</span>
+                        <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
+                        <p>@item.ShortDescription</p>
+                        <strong>@item.Currency @item.Price.ToString("N0")</strong>
+                    </div>
+                </article>
+            }
+        </div>
+    </section>
+}
+else if (currentMode == "Texto")
+{
+    <section class="classified-list">
+        @foreach (var item in Model.Publications)
+        {
+            <article class="classified-row">
+                <div>
+                    <span class="card-meta">@item.Group · @item.Category · @item.Locality</span>
+                    <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
+                    <p>@item.ShortDescription</p>
+                </div>
+                <div class="classified-side">
+                    <strong>@item.Currency @item.Price.ToString("N0")</strong>
+                    <button type="button" class="report-float report-trigger" data-bs-toggle="modal" data-bs-target="#reportModal" data-publication-id="@item.Id" data-publication-title="@item.Title">Denunciar</button>
+                </div>
+            </article>
+        }
+    </section>
+}
+else
+{
+    <section class="gallery-grid">
+        @foreach (var item in Model.Publications)
+        {
+            <article class="listing-card">
+                <a href="/Publications/Details/@item.Id" class="card-image-wrap">
+                    <img src="@item.ImageList.FirstOrDefault()" alt="@item.Title" />
+                    <span class="card-group">@item.Group</span>
+                </a>
+                <div class="card-body">
+                    <div class="card-topline">
+                        <span>@item.Locality</span>
+                        <button type="button" class="report-float report-trigger" data-bs-toggle="modal" data-bs-target="#reportModal" data-publication-id="@item.Id" data-publication-title="@item.Title">Denunciar</button>
+                    </div>
+                    <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
+                    <p>@item.ShortDescription</p>
+                    <strong>@item.Currency @item.Price.ToString("N0")</strong>
+                </div>
+            </article>
+        }
+    </section>
+}
