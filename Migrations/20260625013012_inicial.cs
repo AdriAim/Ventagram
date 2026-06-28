@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ubika.Migrations
+namespace Ventagram.Migrations
 {
     /// <inheritdoc />
     public partial class inicial : Migration

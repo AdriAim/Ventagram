@@ -1,15 +1,15 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using Ubika.Data;
-using Ubika.Models;
-using Ubika.Services;
+using Ventagram.Data;
+using Ventagram.Models;
+using Ventagram.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddControllersWithViews();
-builder.Services.AddDbContext<UbikaDbContext>(options =>
+builder.Services.AddDbContext<VentagramDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
@@ -35,7 +35,7 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
             options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.Events.OnTicketReceived = async context =>
             {
-                var db = context.HttpContext.RequestServices.GetRequiredService<UbikaDbContext>();
+                var db = context.HttpContext.RequestServices.GetRequiredService<VentagramDbContext>();
                 var email = context.Principal?.FindFirstValue(ClaimTypes.Email);
                 if (string.IsNullOrWhiteSpace(email))
                 {
@@ -90,7 +90,7 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<UbikaDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<VentagramDbContext>();
     db.Database.EnsureCreated();
     await SeedData.InitializeAsync(db);
 }

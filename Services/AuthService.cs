@@ -4,12 +4,12 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
-using Ubika.Data;
-using Ubika.Models;
+using Ventagram.Data;
+using Ventagram.Models;
 
-namespace Ubika.Services;
+namespace Ventagram.Services;
 
-public class AuthService(UbikaDbContext db, IHttpContextAccessor httpContextAccessor)
+public class AuthService(VentagramDbContext db, IHttpContextAccessor httpContextAccessor)
 {
     public static string HashPassword(string value)
     {

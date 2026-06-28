@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Ubika.Models;
+namespace Ventagram.Models;
 
 public class ApplicationUser
 {

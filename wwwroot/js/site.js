@@ -1,5 +1,5 @@
 (() => {
-  let ubikaFlashMessage = "";
+  let ventagramFlashMessage = "";
 
   document.addEventListener("DOMContentLoaded", async () => {
     wireReportModal();
@@ -15,15 +15,16 @@
     });
 
     host.innerHTML = await response.text();
-    if (ubikaFlashMessage) {
+    if (ventagramFlashMessage) {
       const banner = document.createElement("div");
       banner.className = "status-banner";
-      banner.textContent = ubikaFlashMessage;
+      banner.textContent = ventagramFlashMessage;
       host.prepend(banner);
-      ubikaFlashMessage = "";
+      ventagramFlashMessage = "";
     }
 
     initMap();
+    wireGalleryCards();
     wireReportForm();
     wireCreateForm();
   }
@@ -69,7 +70,7 @@
       });
 
       const result = await response.json();
-      ubikaFlashMessage = result.message || "La denuncia fue enviada.";
+      ventagramFlashMessage = result.message || "La denuncia fue enviada.";
 
       const modal = bootstrap.Modal.getInstance(document.getElementById("reportModal"));
       modal?.hide();
@@ -213,6 +214,36 @@
     });
 
     syncPanels();
+  }
+
+  function wireGalleryCards() {
+    document.querySelectorAll(".gallery-nav").forEach(button => {
+      if (button.dataset.bound === "true") return;
+
+      button.dataset.bound = "true";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const card = button.closest(".card-image-wrap");
+        const image = card?.querySelector(".gallery-carousel-image");
+        if (!image) return;
+
+        const images = (image.dataset.images || "")
+          .split("|||")
+          .map(x => x.trim())
+          .filter(Boolean);
+
+        if (images.length <= 1) return;
+
+        const direction = Number(button.dataset.direction || 1);
+        const currentIndex = Number(image.dataset.index || 0);
+        const nextIndex = (currentIndex + direction + images.length) % images.length;
+
+        image.src = images[nextIndex];
+        image.dataset.index = String(nextIndex);
+      });
+    });
   }
 
   function serializeCreateForm(form) {

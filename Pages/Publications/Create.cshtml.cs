@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Ubika.Pages.Publications;
+namespace Ventagram.Pages.Publications;
 
 public class CreateModel : PageModel
 {

@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace Ubika.Services;
+namespace Ventagram.Services;
 
 public class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor)
 {

@@ -3,21 +3,24 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Ubika</title>
+    <title>@ViewData["Title"] - Ventagram</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/Ubika.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Ventagram.styles.css" asp-append-version="true" />
 </head>
 <body>
     <div class="page-backdrop"></div>
     <header class="site-header">
         <nav class="site-nav">
             <a class="brand-lockup" asp-page="/Index">
-                <span class="brand-dot"></span>
-                <span>Ubika</span>
+                <img class="brand-mark" src="~/images/logo4.png" alt="Ventagram" />
+                <span class="brand-text">
+                    <strong>Ventagram</strong>
+                    <small>Publicaciones con mapa y criterio</small>
+                </span>
             </a>
             <div class="nav-links">
                 <a asp-page="/Index">Explorar</a>
@@ -45,9 +48,12 @@
         @RenderBody()
     </main>
     <footer class="site-footer">
-        <div>
-            <strong>Ubika</strong>
-            <p>Basta de anuncios sin precios. La comunidad denuncia, vota y manda avisos a la papelera.</p>
+        <div class="footer-brand">
+            <img class="footer-mark" src="~/images/logo4.png" alt="Ventagram" />
+            <div>
+                <strong>Ventagram</strong>
+                <p>Basta de anuncios sin precios. La comunidad denuncia, vota y manda avisos a la papelera.</p>
+            </div>
         </div>
         <div class="footer-links">
             <a asp-page="/Index">Inicio</a>

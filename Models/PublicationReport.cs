@@ -1,4 +1,4 @@
-namespace Ubika.Models;
+namespace Ventagram.Models;
 
 public class PublicationReport
 {

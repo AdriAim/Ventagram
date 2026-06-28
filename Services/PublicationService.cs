@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Ubika.Data;
-using Ubika.Models;
+using Ventagram.Data;
+using Ventagram.Models;
 
-namespace Ubika.Services;
+namespace Ventagram.Services;
 
-public class PublicationService(UbikaDbContext db)
+public class PublicationService(VentagramDbContext db)
 {
     public async Task<List<Publication>> SearchActivePublicationsAsync(string? group, string? query)
     {
@@ -70,7 +70,7 @@ public class PublicationService(UbikaDbContext db)
             Locality = input.Locality,
             ShortDescription = input.ShortDescription,
             LongDescription = input.LongDescription,
-            ImagesCsv = input.ImagesCsv,
+            ImagesCsv = NormalizeImagesCsv(input.ImagesCsv),
             ContactName = input.ContactName,
             ContactPhone = input.ContactPhone,
             ContactEmail = input.ContactEmail,
@@ -206,5 +206,19 @@ public class PublicationService(UbikaDbContext db)
         }
 
         return result;
+    }
+
+    private static string NormalizeImagesCsv(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(",",
+            raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => Uri.IsWellFormedUriString(x, UriKind.Absolute))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(11));
     }
 }

@@ -1,6 +1,6 @@
-# Ubika
+# Ventagram
 
-Ubika es un portal de clasificados hecho en ASP.NET Core 8 con Razor Pages, MySQL y Entity Framework Core.
+Ventagram es un portal de clasificados hecho en ASP.NET Core 8 con Razor Pages, MySQL y Entity Framework Core.
 
 El producto quedó orientado a tres grandes rubros:
 
@@ -32,25 +32,25 @@ Las páginas Razor principales ya no renderizan el contenido completo del negoci
 
 Páginas shell:
 
-- [Pages/Index.cshtml](E:\Proyectos\Ubika\Pages\Index.cshtml)
-- [Pages/Trash.cshtml](E:\Proyectos\Ubika\Pages\Trash.cshtml)
-- [Pages/Publications/Details.cshtml](E:\Proyectos\Ubika\Pages\Publications\Details.cshtml)
-- [Pages/Publications/Create.cshtml](E:\Proyectos\Ubika\Pages\Publications\Create.cshtml)
+- [Pages/Index.cshtml](E:\Proyectos\ventagram\Pages\Index.cshtml)
+- [Pages/Trash.cshtml](E:\Proyectos\ventagram\Pages\Trash.cshtml)
+- [Pages/Publications/Details.cshtml](E:\Proyectos\ventagram\Pages\Publications\Details.cshtml)
+- [Pages/Publications/Create.cshtml](E:\Proyectos\ventagram\Pages\Publications\Create.cshtml)
 
 Controllers:
 
-- [Controllers/ContentController.cs](E:\Proyectos\Ubika\Controllers\ContentController.cs)
+- [Controllers/ContentController.cs](E:\Proyectos\ventagram\Controllers\ContentController.cs)
 
 Vistas parciales HTML servidas por controller:
 
-- [Views/Content/Home.cshtml](E:\Proyectos\Ubika\Views\Content\Home.cshtml)
-- [Views/Content/Trash.cshtml](E:\Proyectos\Ubika\Views\Content\Trash.cshtml)
-- [Views/Content/Details.cshtml](E:\Proyectos\Ubika\Views\Content\Details.cshtml)
-- [Views/Content/Create.cshtml](E:\Proyectos\Ubika\Views\Content\Create.cshtml)
+- [Views/Content/Home.cshtml](E:\Proyectos\ventagram\Views\Content\Home.cshtml)
+- [Views/Content/Trash.cshtml](E:\Proyectos\ventagram\Views\Content\Trash.cshtml)
+- [Views/Content/Details.cshtml](E:\Proyectos\ventagram\Views\Content\Details.cshtml)
+- [Views/Content/Create.cshtml](E:\Proyectos\ventagram\Views\Content\Create.cshtml)
 
 Cliente:
 
-- [wwwroot/js/site.js](E:\Proyectos\Ubika\wwwroot\js\site.js)
+- [wwwroot/js/site.js](E:\Proyectos\ventagram\wwwroot\js\site.js)
 
 ### Endpoints API actuales
 
@@ -99,18 +99,18 @@ Se usa un modelo mixto:
 
 Entidades relevantes:
 
-- [Models/Publication.cs](E:\Proyectos\Ubika\Models\Publication.cs)
-- [Models/PropertyDetail.cs](E:\Proyectos\Ubika\Models\PropertyDetail.cs)
-- [Models/VehicleDetail.cs](E:\Proyectos\Ubika\Models\VehicleDetail.cs)
-- [Models/GeneralDetail.cs](E:\Proyectos\Ubika\Models\GeneralDetail.cs)
-- [Models/PublicationExtraAttribute.cs](E:\Proyectos\Ubika\Models\PublicationExtraAttribute.cs)
-- [Models/PublicationReport.cs](E:\Proyectos\Ubika\Models\PublicationReport.cs)
-- [Models/ApplicationUser.cs](E:\Proyectos\Ubika\Models\ApplicationUser.cs)
+- [Models/Publication.cs](E:\Proyectos\ventagram\Models\Publication.cs)
+- [Models/PropertyDetail.cs](E:\Proyectos\ventagram\Models\PropertyDetail.cs)
+- [Models/VehicleDetail.cs](E:\Proyectos\ventagram\Models\VehicleDetail.cs)
+- [Models/GeneralDetail.cs](E:\Proyectos\ventagram\Models\GeneralDetail.cs)
+- [Models/PublicationExtraAttribute.cs](E:\Proyectos\ventagram\Models\PublicationExtraAttribute.cs)
+- [Models/PublicationReport.cs](E:\Proyectos\ventagram\Models\PublicationReport.cs)
+- [Models/ApplicationUser.cs](E:\Proyectos\ventagram\Models\ApplicationUser.cs)
 
 Persistencia:
 
-- [Data/UbikaDbContext.cs](E:\Proyectos\Ubika\Data\UbikaDbContext.cs)
-- [Data/SeedData.cs](E:\Proyectos\Ubika\Data\SeedData.cs)
+- [Data/VentagramDbContext.cs](E:\Proyectos\ventagram\Data\VentagramDbContext.cs)
+- [Data/SeedData.cs](E:\Proyectos\ventagram\Data\SeedData.cs)
 
 ## Base de datos
 
@@ -120,14 +120,14 @@ Proveedor configurado:
 
 Cadena de desarrollo actual:
 
-- [appsettings.Development.json](E:\Proyectos\Ubika\appsettings.Development.json)
+- [appsettings.Development.json](E:\Proyectos\ventagram\appsettings.Development.json)
 
 Entorno de prueba definido:
 
 - host: `127.0.0.1`
 - puerto: `3307`
 - usuario: `root`
-- base: `ubika`
+- base: `ventagram`
 
 ## Autenticación
 
@@ -140,8 +140,8 @@ Soporta:
 
 Configuración:
 
-- [Program.cs](E:\Proyectos\Ubika\Program.cs)
-- [Services/AuthService.cs](E:\Proyectos\Ubika\Services\AuthService.cs)
+- [Program.cs](E:\Proyectos\ventagram\Program.cs)
+- [Services/AuthService.cs](E:\Proyectos\ventagram\Services\AuthService.cs)
 
 ## Mapa
 
@@ -167,18 +167,18 @@ Si no hay clave, se muestra placeholder.
 ### Build
 
 ```powershell
-dotnet build E:\Proyectos\Ubika\Ubika.csproj
+dotnet build E:\Proyectos\ventagram\Ventagram.csproj
 ```
 
 ### Run
 
 ```powershell
-dotnet run --project E:\Proyectos\Ubika\Ubika.csproj --urls http://127.0.0.1:5099
+dotnet run --project E:\Proyectos\ventagram\Ventagram.csproj --urls http://127.0.0.1:5099
 ```
 
 ## Estado Git
 
-`E:\Proyectos\Ubika` hoy no es un repositorio Git. Por eso:
+`E:\Proyectos\ventagram` hoy no es un repositorio Git. Por eso:
 
 - no hay branch local para actualizar
 - no se puede hacer `git status`, `commit` ni `switch` ahí

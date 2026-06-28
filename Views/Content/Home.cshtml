@@ -6,13 +6,22 @@
 
 <section class="hero-shell">
     <div class="hero-copy">
-        <span class="eyebrow">Ubika en comunidad</span>
+        <span class="eyebrow">Ventagram en comunidad</span>
         <h1>Basta de <span>anuncios sin precios</span>.</h1>
-        <p>En Ubika lo regulamos entre todos: denunciá, votá y enviá los avisos flojos a la papelera comunitaria.</p>
+        <p>En Ventagram lo regulamos entre todos: denunciá, votá y enviá los avisos flojos a la papelera comunitaria.</p>
+        <div class="hero-actions">
+            <a class="primary-pill" href="/Publications/Create">Publicar ahora</a>
+            <a class="ghost-pill" href="/Trash">Ver papelera</a>
+        </div>
     </div>
-    <div class="hero-actions">
-        <a class="primary-pill" href="/Publications/Create">Publicar ahora</a>
-        <a class="ghost-pill" href="/Trash">Ver papelera</a>
+    <div class="hero-visual">
+        <div class="hero-logo-card">
+            <img src="~/images/logo4.png" alt="Logo de Ventagram" />
+        </div>
+        <div class="hero-stat">
+            <strong>Mapa + evidencia visual</strong>
+            <span>La identidad ahora toma el coral, azul pizarra y verde suave del logo para ordenar toda la experiencia.</span>
+        </div>
     </div>
 </section>
 
@@ -122,24 +131,33 @@ else if (currentMode == "Texto")
 }
 else
 {
-    <section class="gallery-grid">
-        @foreach (var item in Model.Publications)
-        {
-            <article class="listing-card">
-                <a href="/Publications/Details/@item.Id" class="card-image-wrap">
-                    <img src="@item.ImageList.FirstOrDefault()" alt="@item.Title" />
-                    <span class="card-group">@item.Group</span>
-                </a>
-                <div class="card-body">
-                    <div class="card-topline">
-                        <span>@item.Locality</span>
-                        <button type="button" class="report-float report-trigger" data-bs-toggle="modal" data-bs-target="#reportModal" data-publication-id="@item.Id" data-publication-title="@item.Title">Denunciar</button>
-                    </div>
-                    <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
-                    <p>@item.ShortDescription</p>
-                    <strong>@item.Currency @item.Price.ToString("N0")</strong>
-                </div>
-            </article>
-        }
+    <section class="gallery-shell">
+        <div class="gallery-header">
+            <div>
+                <span class="gallery-kicker">Vista galería</span>
+                <h2>@currentGroup populares en @Model.Publications.First().Locality</h2>
+            </div>
+        </div>
+
+        <div class="gallery-rail">
+            @foreach (var item in Model.Publications)
+            {
+                var galleryTitle = item.Title.Split(" - oportunidad", StringSplitOptions.TrimEntries)[0];
+                var galleryImages = item.ImageList.Take(11).ToList();
+                <article class="listing-card listing-card-compact">
+                    <a href="/Publications/Details/@item.Id" class="card-image-wrap">
+                        <img src="@galleryImages.FirstOrDefault()" alt="@item.Title" class="gallery-carousel-image" data-images="@string.Join("|||", galleryImages)" data-index="0" />
+                        <span class="gallery-badge">@item.Currency @item.Price.ToString("N0")</span>
+                        @if (galleryImages.Count > 1)
+                        {
+                            <button type="button" class="gallery-nav gallery-nav-prev" data-direction="-1" aria-label="Foto anterior">&#8249;</button>
+                            <button type="button" class="gallery-nav gallery-nav-next" data-direction="1" aria-label="Foto siguiente">&#8250;</button>
+                        }
+                        <button type="button" class="gallery-flag report-trigger" data-bs-toggle="modal" data-bs-target="#reportModal" data-publication-id="@item.Id" data-publication-title="@item.Title" aria-label="Denunciar @item.Title">Denunciar</button>
+                        <span class="gallery-title-overlay">@galleryTitle</span>
+                    </a>
+                </article>
+            }
+        </div>
     </section>
 }

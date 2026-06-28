@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Ubika.Pages;
+namespace Ventagram.Pages;
 
 public class IndexModel(IConfiguration configuration) : PageModel
 {

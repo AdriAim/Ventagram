@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Ubika.Services;
+using Ventagram.Services;
 
-namespace Ubika.Pages.Publications;
+namespace Ventagram.Pages.Publications;
 
 public class DeleteAnonymousModel(PublicationService publicationService) : PageModel
 {

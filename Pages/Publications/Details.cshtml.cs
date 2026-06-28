@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Ubika.Pages.Publications;
+namespace Ventagram.Pages.Publications;
 
 public class DetailsModel : PageModel
 {

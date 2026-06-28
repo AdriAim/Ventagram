@@ -1,9 +1,9 @@
-using Ubika.Data;
-using Ubika.Models;
+using Ventagram.Data;
+using Ventagram.Models;
 
-namespace Ubika.Services;
+namespace Ventagram.Services;
 
-public class ReportService(UbikaDbContext db)
+public class ReportService(VentagramDbContext db)
 {
     public async Task CreateAsync(int publicationId, string reason)
     {

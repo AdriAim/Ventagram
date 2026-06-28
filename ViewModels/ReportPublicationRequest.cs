@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Ubika.ViewModels;
+namespace Ventagram.ViewModels;
 
 public class ReportPublicationRequest
 {

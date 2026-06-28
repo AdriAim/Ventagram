@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Ubika.Pages;
+namespace Ventagram.Pages;
 
 public class TrashModel : PageModel
 {

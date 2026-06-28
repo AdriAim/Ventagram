@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Ubika.Services;
+using Ventagram.Services;
 
-namespace Ubika.Pages.Account;
+namespace Ventagram.Pages.Account;
 
 public class LogoutModel(AuthService authService) : PageModel
 {

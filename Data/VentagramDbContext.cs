@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Ubika.Models;
+using Ventagram.Models;
 
-namespace Ubika.Data;
+namespace Ventagram.Data;
 
-public class UbikaDbContext(DbContextOptions<UbikaDbContext> options) : DbContext(options)
+public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : DbContext(options)
 {
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
     public DbSet<Publication> Publications => Set<Publication>();

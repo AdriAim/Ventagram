@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using Ubika.Models;
+using Ventagram.Models;
 
-namespace Ubika.ViewModels;
+namespace Ventagram.ViewModels;
 
 public class CreatePublicationApiRequest : PublicationCreateRequest
 {

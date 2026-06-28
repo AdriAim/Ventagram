@@ -1,12 +1,12 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Ubika.Data;
-using Ubika.Models;
-using Ubika.Services;
-using Ubika.ViewModels;
+using Ventagram.Data;
+using Ventagram.Models;
+using Ventagram.Services;
+using Ventagram.ViewModels;
 
-namespace Ubika.Controllers;
+namespace Ventagram.Controllers;
 
 [ApiController]
 [Route("api/content")]
@@ -15,7 +15,7 @@ public class ContentController(
     ReportService reportService,
     AuthService authService,
     CurrentUserAccessor currentUserAccessor,
-    UbikaDbContext db,
+    VentagramDbContext db,
     IConfiguration configuration) : Controller
 {
     [HttpGet("home")]
