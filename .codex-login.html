@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ingresar - Ventagram</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/css/site.css?v=gFnMUlVNwnCYqrwtL-htsjMZrmbGOk7w1HnTIZqfx8Y" />
+</head>
+<body>
+    <div class="page-backdrop"></div>
+    <header class="site-header">
+        <nav class="site-nav">
+            <a class="brand-lockup" href="/">
+                <img class="brand-mark" src="/images/logo5.png" alt="Ventagram" />
+                <span class="brand-text">
+                    <strong>Ventagram</strong>
+                    <small>Publicaciones con mapa y criterio</small>
+                </span>
+            </a>
+            <div class="nav-links">
+                <a href="/">Explorar</a>
+                <a href="/Publications/Create">Publicar</a>
+                <a href="/Trash">Papelera</a>
+                <a href="/Publications/DeleteAnonymous">Baja anónima</a>
+            </div>
+            <div class="nav-actions">
+                    <a class="ghost-pill compact" href="/Account/Login">Ingresar</a>
+                    <a class="primary-pill compact" href="/Account/Register">Crear cuenta</a>
+            </div>
+        </nav>
+    </header>
+    <main class="page-shell">
+        
+<section class="form-shell narrow">
+    <div class="section-heading">
+        <span class="eyebrow">Acceso</span>
+        <h1>Ingresá a tu cuenta</h1>
+        <p>Ingresá con email y contraseña.</p>
+    </div>
+
+    <form method="post" class="stack-form">
+        <input type="hidden" id="ReturnUrl" name="ReturnUrl" value="" />
+        
+        <div class="register-row">
+            <label>
+                <span>Email</span>
+                <input type="email" data-val="true" data-val-email="Ingres&#xE1; un email v&#xE1;lido." data-val-required="Ingres&#xE1; tu email." id="Input_Email" name="Input.Email" value="" />
+                <span class="text-danger field-validation-valid" data-valmsg-for="Input.Email" data-valmsg-replace="true"></span>
+            </label>
+        </div>
+        <div class="register-row">
+            <label>
+                <span>Contraseña</span>
+                <input type="password" data-val="true" data-val-required="Ingres&#xE1; tu contrase&#xF1;a." id="Input_Password" name="Input.Password" />
+                <span class="text-danger field-validation-valid" data-valmsg-for="Input.Password" data-valmsg-replace="true"></span>
+            </label>
+        </div>
+        <a class="field-hint" href="/Account/ForgotPassword">¿Olvidaste tu contraseña?</a>
+        <div class="hero-actions">
+            <button type="submit" class="primary-pill">Ingresar</button>
+        </div>
+    <input name="__RequestVerificationToken" type="hidden" value="CfDJ8HBoiFHMTIdOqtZKLSKT1RvZzaVJr8U29NTgzlzOFLEMyzk9y-WEuJYjJMOPpV8fj2VsR12PC0KddZQ52N7B4hb80vyonBcinxsmAGeVAyf9t9EHAngNrw3z87moagwD-uWW_KqM72EGlNveD4NcSP8" /></form>
+</section>
+
+
+    </main>
+    <footer class="site-footer">
+        <div class="footer-brand">
+            <img class="footer-mark" src="/images/logo5.png" alt="Ventagram" />
+            <div>
+                <strong>Ventagram</strong>
+                <p>Basta de anuncios sin precios. La comunidad denuncia, vota y manda avisos a la papelera.</p>
+            </div>
+        </div>
+        <div class="footer-links">
+            <a href="/">Inicio</a>
+            <a href="/Publications/Create">Publicar</a>
+            <a href="/Trash">Papelera</a>
+            <a href="/Privacy">Privacidad</a>
+        </div>
+    </footer>
+
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+    <script src="/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/site.js?v=sB7cuARYfm3W1kKoZRSfLRIRasnoUu69A09hDOjJNgs"></script>
+    
+    <script src="/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+
+
+</body>
+</html>

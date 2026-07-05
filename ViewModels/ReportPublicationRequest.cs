@@ -8,5 +8,9 @@ public class ReportPublicationRequest
     public int PublicationId { get; set; }
 
     [Required]
-    public string Reason { get; set; } = "No corresponde";
+    [Range(1, int.MaxValue)]
+    public int ReasonId { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }

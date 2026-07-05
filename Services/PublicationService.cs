@@ -6,11 +6,11 @@ namespace Ventagram.Services;
 
 public class PublicationService(VentagramDbContext db)
 {
-    public async Task<List<Publication>> SearchActivePublicationsAsync(string? group, string? query)
+    public async Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query)
     {
         var items = await GetActivePublicationsAsync();
         return items
-            .Where(x => string.IsNullOrWhiteSpace(group) || x.Group == group)
+            .Where(x => group is null || x.Group == group.Value)
             .Where(x => string.IsNullOrWhiteSpace(query)
                 || x.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
                 || x.ShortDescription.Contains(query, StringComparison.OrdinalIgnoreCase)
@@ -36,11 +36,13 @@ public class PublicationService(VentagramDbContext db)
     public async Task<Publication?> GetByIdAsync(int id)
     {
         return await db.Publications
+            .Include(x => x.User)
             .Include(x => x.PropertyDetail)
             .Include(x => x.VehicleDetail)
             .Include(x => x.GeneralDetail)
             .Include(x => x.ExtraAttributes)
             .Include(x => x.Reports)
+                .ThenInclude(x => x.Reason)
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
@@ -52,6 +54,7 @@ public class PublicationService(VentagramDbContext db)
             .Include(x => x.GeneralDetail)
             .Include(x => x.ExtraAttributes)
             .Include(x => x.Reports)
+                .ThenInclude(x => x.Reason)
             .Where(x => x.Reports.Any())
             .OrderByDescending(x => x.Reports.Count)
             .ThenByDescending(x => x.Reports.Max(r => r.CreatedAtUtc))
@@ -67,7 +70,7 @@ public class PublicationService(VentagramDbContext db)
             Title = input.Title,
             Price = input.Price,
             Currency = input.Currency,
-            Locality = input.Locality,
+            Locality = input.NoLocation ? string.Empty : input.Locality,
             ShortDescription = input.ShortDescription,
             LongDescription = input.LongDescription,
             ImagesCsv = NormalizeImagesCsv(input.ImagesCsv),
@@ -92,7 +95,7 @@ public class PublicationService(VentagramDbContext db)
             publication.AnonymousDeletePasswordHash = AuthService.HashPassword(rawAnonymousPassword);
         }
 
-        if (input.Group == "Inmuebles")
+        if (input.Group == PublicationGroup.Inmuebles && HasPropertyDetailData(input))
         {
             publication.PropertyDetail = new PropertyDetail
             {
@@ -114,7 +117,7 @@ public class PublicationService(VentagramDbContext db)
                 Amenities = input.Amenities
             };
         }
-        else if (input.Group == "Rodados")
+        else if (input.Group == PublicationGroup.Rodados && HasVehicleDetailData(input))
         {
             publication.VehicleDetail = new VehicleDetail
             {
@@ -138,7 +141,7 @@ public class PublicationService(VentagramDbContext db)
                 GeneralCondition = input.GeneralCondition
             };
         }
-        else
+        else if (input.Group == PublicationGroup.Generales && HasGeneralDetailData(input))
         {
             publication.GeneralDetail = new GeneralDetail
             {
@@ -217,8 +220,65 @@ public class PublicationService(VentagramDbContext db)
 
         return string.Join(",",
             raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(x => Uri.IsWellFormedUriString(x, UriKind.Absolute))
+                .Where(x => Uri.IsWellFormedUriString(x, UriKind.Absolute) || x.StartsWith("/", StringComparison.Ordinal))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(11));
+    }
+
+    private static bool HasPropertyDetailData(PublicationCreateRequest input)
+    {
+        return !string.IsNullOrWhiteSpace(input.PropertyType)
+            || !string.IsNullOrWhiteSpace(input.Operation)
+            || !string.IsNullOrWhiteSpace(input.Zone)
+            || input.TotalAreaM2 is not null
+            || input.CoveredAreaM2 is not null
+            || !string.IsNullOrWhiteSpace(input.RoomsOrBedrooms)
+            || input.Bathrooms is not null
+            || !string.IsNullOrWhiteSpace(input.Address)
+            || input.GarageSpaces is not null
+            || input.AgeYears is not null
+            || input.Expenses is not null
+            || !string.IsNullOrWhiteSpace(input.Condition)
+            || !string.IsNullOrWhiteSpace(input.Services)
+            || !string.IsNullOrWhiteSpace(input.Amenities);
+    }
+
+    private static bool HasVehicleDetailData(PublicationCreateRequest input)
+    {
+        return !string.IsNullOrWhiteSpace(input.VehicleType)
+            || !string.IsNullOrWhiteSpace(input.Brand)
+            || !string.IsNullOrWhiteSpace(input.Model)
+            || input.Year is not null
+            || input.Kilometers is not null
+            || !string.IsNullOrWhiteSpace(input.Fuel)
+            || !string.IsNullOrWhiteSpace(input.Transmission)
+            || !string.IsNullOrWhiteSpace(input.Version)
+            || !string.IsNullOrWhiteSpace(input.Color)
+            || !string.IsNullOrWhiteSpace(input.LicensePlate)
+            || !string.IsNullOrWhiteSpace(input.Engine)
+            || !string.IsNullOrWhiteSpace(input.Traction)
+            || input.Doors is not null
+            || input.OwnersCount is not null
+            || input.AcceptsTrade
+            || input.FinancingAvailable
+            || !string.IsNullOrWhiteSpace(input.Equipment)
+            || !string.IsNullOrWhiteSpace(input.GeneralCondition);
+    }
+
+    private static bool HasGeneralDetailData(PublicationCreateRequest input)
+    {
+        return !string.IsNullOrWhiteSpace(input.Subcategory)
+            || !string.IsNullOrWhiteSpace(input.ItemCondition)
+            || !string.IsNullOrWhiteSpace(input.Brand)
+            || !string.IsNullOrWhiteSpace(input.Model)
+            || !string.IsNullOrWhiteSpace(input.Sku)
+            || input.Stock is not null
+            || !string.IsNullOrWhiteSpace(input.Color)
+            || !string.IsNullOrWhiteSpace(input.Measure)
+            || !string.IsNullOrWhiteSpace(input.Weight)
+            || !string.IsNullOrWhiteSpace(input.Dimensions)
+            || !string.IsNullOrWhiteSpace(input.Warranty)
+            || !string.IsNullOrWhiteSpace(input.Shipping)
+            || input.AcceptsTrade;
     }
 }

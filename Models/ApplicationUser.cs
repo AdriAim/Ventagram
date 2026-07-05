@@ -15,11 +15,24 @@ public class ApplicationUser
     [StringLength(32)]
     public string Phone { get; set; } = string.Empty;
 
+    public bool RespondsEmails { get; set; }
+
+    public bool AcceptsCalls { get; set; }
+
+    public bool RespondsWhatsApp { get; set; }
+
+    [StringLength(40)]
+    public string ContactPreference { get; set; } = "CallsWhatsApp";
+
     [StringLength(256)]
     public string PasswordHash { get; set; } = string.Empty;
 
     [StringLength(40)]
     public string AuthProvider { get; set; } = "Local";
+
+    public int? ArgentineLocalityId { get; set; }
+
+    public ArgentineLocality? ArgentineLocality { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

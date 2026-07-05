@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using Ventagram.Data;
+using Ventagram.Models;
 
 namespace Ventagram.Pages;
 
-public class IndexModel(IConfiguration configuration) : PageModel
+public class IndexModel(IConfiguration configuration, VentagramDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public string Group { get; set; } = "Inmuebles";
@@ -14,9 +17,16 @@ public class IndexModel(IConfiguration configuration) : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Query { get; set; }
 
+    public List<PublicationReportReason> ReportReasons { get; private set; } = [];
+
     public string MapTilerKey => configuration["MapTiler:ApiKey"] ?? string.Empty;
 
-    public void OnGet()
+    public async Task OnGetAsync()
     {
+        ReportReasons = await db.PublicationReportReasons
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
     }
 }

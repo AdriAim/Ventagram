@@ -25,11 +25,20 @@
                         <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
                         <p>@item.ShortDescription</p>
                         <div class="trash-tags">
-                            @foreach (var reason in item.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason))
+                            @foreach (var reason in item.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason?.Name ?? $"Razón #{r.ReasonId}"))
                             {
                                 <span class="trash-tag">@reason</span>
                             }
                         </div>
+                        @{
+                            var reportComment = item.Reports
+                                .OrderByDescending(r => r.CreatedAtUtc)
+                                .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Comment))?.Comment;
+                        }
+                        @if (!string.IsNullOrWhiteSpace(reportComment))
+                        {
+                            <p class="trash-comment">@reportComment</p>
+                        }
                     </div>
                     <div class="classified-side">
                         <strong>@item.Reports.Count denuncia(s)</strong>

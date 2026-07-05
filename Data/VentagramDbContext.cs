@@ -10,7 +10,11 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
     public DbSet<PropertyDetail> PropertyDetails => Set<PropertyDetail>();
     public DbSet<VehicleDetail> VehicleDetails => Set<VehicleDetail>();
     public DbSet<GeneralDetail> GeneralDetails => Set<GeneralDetail>();
+    public DbSet<ArgentineLocality> ArgentineLocalities => Set<ArgentineLocality>();
+    public DbSet<PublicationGroupType> PublicationGroupTypes => Set<PublicationGroupType>();
+    public DbSet<PublicationCategory> PublicationCategories => Set<PublicationCategory>();
     public DbSet<PublicationExtraAttribute> PublicationExtraAttributes => Set<PublicationExtraAttribute>();
+    public DbSet<PublicationReportReason> PublicationReportReasons => Set<PublicationReportReason>();
     public DbSet<PublicationReport> PublicationReports => Set<PublicationReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -19,9 +23,54 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
             .HasIndex(x => x.Email)
             .IsUnique();
 
+        modelBuilder.Entity<ApplicationUser>()
+            .HasOne(x => x.ArgentineLocality)
+            .WithMany()
+            .HasForeignKey(x => x.ArgentineLocalityId);
+
+        modelBuilder.Entity<ArgentineLocality>()
+            .HasIndex(x => new { x.Province, x.Locality })
+            .IsUnique();
+
+        modelBuilder.Entity<PublicationGroupType>()
+            .HasKey(x => x.Id);
+
+        modelBuilder.Entity<PublicationGroupType>()
+            .Property(x => x.Id)
+            .ValueGeneratedNever();
+
+        modelBuilder.Entity<PublicationGroupType>()
+            .HasIndex(x => x.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<Publication>()
+            .Property(x => x.Group)
+            .HasConversion<byte>()
+            .HasColumnType("tinyint unsigned");
+
         modelBuilder.Entity<Publication>()
             .Property(x => x.Price)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<PublicationCategory>()
+            .Property(x => x.Group)
+            .HasConversion<byte>()
+            .HasColumnType("tinyint unsigned");
+
+        modelBuilder.Entity<PublicationCategory>()
+            .HasIndex(x => new { x.Group, x.Name })
+            .IsUnique();
+
+        modelBuilder.Entity<PublicationReportReason>()
+            .HasKey(x => x.Id);
+
+        modelBuilder.Entity<PublicationReportReason>()
+            .Property(x => x.Id)
+            .ValueGeneratedOnAdd();
+
+        modelBuilder.Entity<PublicationReportReason>()
+            .HasIndex(x => x.Name)
+            .IsUnique();
 
         modelBuilder.Entity<PropertyDetail>()
             .Property(x => x.Expenses)
@@ -41,5 +90,11 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
             .HasOne(x => x.GeneralDetail)
             .WithOne(x => x.Publication)
             .HasForeignKey<GeneralDetail>(x => x.PublicationId);
+
+        modelBuilder.Entity<PublicationReport>()
+            .HasOne(x => x.Reason)
+            .WithMany(x => x.Reports)
+            .HasForeignKey(x => x.ReasonId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

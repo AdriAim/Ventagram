@@ -2,7 +2,7 @@ namespace Ventagram.Models;
 
 public class PublicationCreateRequest
 {
-    public string Group { get; set; } = string.Empty;
+    public PublicationGroup Group { get; set; } = PublicationGroup.Inmuebles;
     public string Category { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public decimal Price { get; set; }
@@ -11,15 +11,16 @@ public class PublicationCreateRequest
     public string ShortDescription { get; set; } = string.Empty;
     public string? LongDescription { get; set; }
     public string ImagesCsv { get; set; } = string.Empty;
-    public string ContactName { get; set; } = string.Empty;
-    public string ContactPhone { get; set; } = string.Empty;
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
     public string? ContactEmail { get; set; }
     public bool Featured { get; set; }
     public string? VideoUrl { get; set; }
     public string? InternalNotes { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
-    public string PublisherMode { get; set; } = "Anonymous";
+    public bool NoLocation { get; set; }
+    public string? PublisherMode { get; set; } = "Anonymous";
     public string? PropertyType { get; set; }
     public string? Operation { get; set; }
     public string? Zone { get; set; }

@@ -7,6 +7,74 @@ namespace Ventagram.Data;
 public static class SeedData
 {
     private const int TargetPublicationsPerGroup = 50;
+    private static readonly PublicationGroupType[] PublicationGroupCatalog =
+    [
+        new() { Id = (byte)PublicationGroup.Inmuebles, Name = "Inmuebles", SortOrder = 1, IsActive = true },
+        new() { Id = (byte)PublicationGroup.Rodados, Name = "Rodados", SortOrder = 2, IsActive = true },
+        new() { Id = (byte)PublicationGroup.Generales, Name = "Generales", SortOrder = 3, IsActive = true },
+        new() { Id = (byte)PublicationGroup.Embarcaciones, Name = "Embarcaciones", SortOrder = 4, IsActive = true }
+    ];
+    private static readonly PublicationReportReason[] PublicationReportReasonCatalog =
+    [
+        new() { Id = 1, Name = "Spam/Publicidad", SortOrder = 1, IsActive = true },
+        new() { Id = 2, Name = "Fraude", SortOrder = 2, IsActive = true },
+        new() { Id = 3, Name = "Precio no corresponde", SortOrder = 3, IsActive = true },
+        new() { Id = 4, Name = "Foto no corresponde", SortOrder = 4, IsActive = true },
+        new() { Id = 5, Name = "Ubicacion erronea", SortOrder = 5, IsActive = true }
+    ];
+    private static readonly (PublicationGroup Group, string[] Categories)[] PublicationCategoryCatalog =
+    [
+        (PublicationGroup.Inmuebles,
+        [
+            "Departamento",
+            "Casa",
+            "PH",
+            "Terreno",
+            "Local comercial",
+            "Campo",
+            "Quinta vacacional",
+            "Oficina comercial",
+            "Garage",
+            "Bodega-Galpón",
+            "Fondo de comercio",
+            "Hotel",
+            "Depósito",
+            "Bóveda, nicho o parcela",
+            "Cama náutica",
+            "Consultorio",
+            "Edificio",
+            "Desarrollo horizontal",
+            "Desarrollo vertical"
+        ]),
+        (PublicationGroup.Rodados,
+        [
+            "Autos",
+            "Utilitarios y Camionetas",
+            "Motos",
+            "Planes",
+            "Cuatris",
+            "Camiones",
+            "Otros"
+        ]),
+        (PublicationGroup.Generales,
+        [
+            "Celular",
+            "Notebook",
+            "Electrodoméstico",
+            "Mueble",
+            "Herramienta",
+            "Ropa",
+            "Deporte"
+        ]),
+        (PublicationGroup.Embarcaciones,
+        [
+            "Lanchas",
+            "Veleros",
+            "Motos de agua",
+            "Botes y semirrigidos",
+            "Accesorios nauticos"
+        ])
+    ];
     private static readonly string[] PropertyGalleryPool =
     [
         "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80",
@@ -40,6 +108,10 @@ public static class SeedData
 
     public static async Task InitializeAsync(VentagramDbContext db)
     {
+        await EnsurePublicationGroupsAsync(db);
+        await EnsurePublicationCategoriesAsync(db);
+        await EnsurePublicationReportReasonsAsync(db);
+
         var user = await db.Users.FirstOrDefaultAsync(x => x.Email == "demo@ventagram.local");
         if (user is null)
         {
@@ -61,7 +133,7 @@ public static class SeedData
         var existingCounts = await db.Publications
             .GroupBy(x => x.Group)
             .Select(x => new { Group = x.Key, Count = x.Count() })
-            .ToDictionaryAsync(x => x.Group, x => x.Count, StringComparer.OrdinalIgnoreCase);
+            .ToDictionaryAsync(x => x.Group, x => x.Count);
 
         var catalog = BuildCatalog(user);
         var available = catalog
@@ -69,7 +141,7 @@ public static class SeedData
             .ToList();
 
         var missing = new List<Publication>();
-        foreach (var group in new[] { "Inmuebles", "Rodados", "Generales" })
+        foreach (var group in new[] { PublicationGroup.Inmuebles, PublicationGroup.Rodados, PublicationGroup.Generales })
         {
             var current = existingCounts.TryGetValue(group, out var count) ? count : 0;
             var needed = Math.Max(0, TargetPublicationsPerGroup - current);
@@ -79,7 +151,7 @@ public static class SeedData
             }
 
             var selected = available
-                .Where(x => x.Group.Equals(group, StringComparison.OrdinalIgnoreCase))
+                .Where(x => x.Group == group)
                 .Take(needed)
                 .ToList();
 
@@ -99,7 +171,98 @@ public static class SeedData
             await db.SaveChangesAsync();
         }
 
-        await BackfillGalleryImagesAsync(db);
+        await BackfillGalleryImagesAsync(db, user.Id);
+    }
+
+    private static async Task EnsurePublicationGroupsAsync(VentagramDbContext db)
+    {
+        var existingIds = await db.PublicationGroupTypes
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        var missing = PublicationGroupCatalog
+            .Where(x => !existingIds.Contains(x.Id))
+            .Select(x => new PublicationGroupType
+            {
+                Id = x.Id,
+                Name = x.Name,
+                SortOrder = x.SortOrder,
+                IsActive = x.IsActive
+            })
+            .ToList();
+
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        db.PublicationGroupTypes.AddRange(missing);
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsurePublicationCategoriesAsync(VentagramDbContext db)
+    {
+        var existingKeys = new HashSet<string>(
+            await db.PublicationCategories
+                .Select(x => $"{(byte)x.Group}|{x.Name}")
+                .ToListAsync(),
+            StringComparer.OrdinalIgnoreCase);
+
+        var missing = new List<PublicationCategory>();
+        foreach (var (group, categories) in PublicationCategoryCatalog)
+        {
+            for (var index = 0; index < categories.Length; index++)
+            {
+                var name = categories[index];
+                var key = $"{(byte)group}|{name}";
+                if (existingKeys.Contains(key))
+                {
+                    continue;
+                }
+
+                missing.Add(new PublicationCategory
+                {
+                    Group = group,
+                    Name = name,
+                    SortOrder = index + 1,
+                    IsActive = true
+                });
+            }
+        }
+
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        db.PublicationCategories.AddRange(missing);
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsurePublicationReportReasonsAsync(VentagramDbContext db)
+    {
+        var existingIds = await db.PublicationReportReasons
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        var missing = PublicationReportReasonCatalog
+            .Where(x => !existingIds.Contains(x.Id))
+            .Select(x => new PublicationReportReason
+            {
+                Id = x.Id,
+                Name = x.Name,
+                SortOrder = x.SortOrder,
+                IsActive = x.IsActive
+            })
+            .ToList();
+
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        db.PublicationReportReasons.AddRange(missing);
+        await db.SaveChangesAsync();
     }
 
     private static List<Publication> BuildCatalog(ApplicationUser user)
@@ -747,7 +910,7 @@ public static class SeedData
     {
         var publication = new Publication
         {
-            Group = "Inmuebles",
+            Group = PublicationGroup.Inmuebles,
             Category = category,
             Title = title,
             Price = price,
@@ -810,7 +973,7 @@ public static class SeedData
     {
         var publication = new Publication
         {
-            Group = "Rodados",
+            Group = PublicationGroup.Rodados,
             Category = category,
             Title = title,
             Price = price,
@@ -868,7 +1031,7 @@ public static class SeedData
     {
         var publication = new Publication
         {
-            Group = "Generales",
+            Group = PublicationGroup.Generales,
             Category = category,
             Title = title,
             Price = price,
@@ -912,15 +1075,45 @@ public static class SeedData
         }
     }
 
-    private static async Task BackfillGalleryImagesAsync(VentagramDbContext db)
+    private static async Task BackfillGalleryImagesAsync(VentagramDbContext db, int demoUserId)
     {
         var publications = await db.Publications.ToListAsync();
         var changed = false;
+        var seedGalleryImages = new HashSet<string>(
+            PropertyGalleryPool
+                .Concat(VehicleGalleryPool)
+                .Concat(GeneralGalleryPool),
+            StringComparer.OrdinalIgnoreCase);
 
         foreach (var publication in publications)
         {
             var currentImages = publication.ImagesCsv
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (publication.UserId != demoUserId)
+            {
+                if (currentImages.Length <= 1)
+                {
+                    continue;
+                }
+
+                var cleanedImages = currentImages
+                    .Take(1)
+                    .Concat(currentImages.Skip(1).Where(x => !seedGalleryImages.Contains(x)))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(11)
+                    .ToArray();
+
+                var normalizedCurrent = string.Join(",", currentImages);
+                var normalizedCleaned = string.Join(",", cleanedImages);
+                if (!string.Equals(normalizedCurrent, normalizedCleaned, StringComparison.Ordinal))
+                {
+                    publication.ImagesCsv = normalizedCleaned;
+                    changed = true;
+                }
+
+                continue;
+            }
 
             if (currentImages.Length >= 2)
             {
@@ -935,8 +1128,8 @@ public static class SeedData
 
             publication.ImagesCsv = publication.Group switch
             {
-                "Inmuebles" => BuildImagesCsv(primary, PropertyGalleryPool),
-                "Rodados" => BuildImagesCsv(primary, VehicleGalleryPool),
+                PublicationGroup.Inmuebles => BuildImagesCsv(primary, PropertyGalleryPool),
+                PublicationGroup.Rodados => BuildImagesCsv(primary, VehicleGalleryPool),
                 _ => BuildImagesCsv(primary, GeneralGalleryPool)
             };
 

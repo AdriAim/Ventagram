@@ -8,17 +8,108 @@
     <div class="section-heading">
         <span class="eyebrow">Cuenta nueva</span>
         <h1>Crear usuario</h1>
-        <p>Se acepta cualquier email válido. Pedimos nombre, teléfono y contraseña.</p>
+        <p>Guardamos tus datos de contacto y la localidad donde vives para sugerirte el mapa al publicar.</p>
     </div>
 
-    <form method="post" class="stack-form">
+    <form method="post" class="stack-form register-form">
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        <div class="form-grid">
-            <label><span>Nombre</span><input asp-for="Input.Name" /></label>
-            <label><span>Email</span><input asp-for="Input.Email" /></label>
-            <label><span>Teléfono</span><input asp-for="Input.Phone" /></label>
-            <label><span>Contraseña</span><input asp-for="Input.Password" type="password" /></label>
+
+        <div class="register-row">
+            <label>
+                <span>Nombre</span>
+                <input asp-for="Input.Name" />
+                <span asp-validation-for="Input.Name" class="text-danger"></span>
+            </label>
         </div>
+
+        <div class="register-row">
+            <label>
+                <span>Email</span>
+                <input asp-for="Input.Email" />
+                <span asp-validation-for="Input.Email" class="text-danger"></span>
+            </label>
+        </div>
+
+        <div class="register-row">
+            <label>
+                <span>Localidad de residencia</span>
+                <select asp-for="Input.ArgentineLocalityId">
+                    <option value="">Selecciona tu localidad</option>
+                    @{
+                        string? currentProvince = null;
+                    }
+                    @foreach (var locality in Model.AvailableLocalities)
+                    {
+                        if (!string.Equals(currentProvince, locality.Province, StringComparison.Ordinal))
+                        {
+                            if (currentProvince is not null)
+                            {
+                                @:</optgroup>
+                            }
+
+                            currentProvince = locality.Province;
+                            @:<optgroup label="@currentProvince">
+                        }
+
+                        <option value="@locality.Id">@locality.Locality</option>
+                    }
+                    @if (currentProvince is not null)
+                    {
+                        @:</optgroup>
+                    }
+                </select>
+                <span class="field-hint">Usaremos esta localidad de Argentina para proponerte la ubicacion inicial al publicar.</span>
+                <span asp-validation-for="Input.ArgentineLocalityId" class="text-danger"></span>
+            </label>
+        </div>
+
+        <div class="register-row">
+            <label>
+                <span>Telefono</span>
+                <div class="phone-inline">
+                    <select asp-for="Input.PhoneCountry" data-phone-country>
+                        <option value="AR">Argentina</option>
+                        <option value="INT">Internacional</option>
+                    </select>
+                    <input asp-for="Input.Phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+54 9 1145666454" data-phone-mask="ar" />
+                </div>
+                <span class="field-hint">Argentina: +54 9 1145666454.</span>
+                <span asp-validation-for="Input.Phone" class="text-danger"></span>
+            </label>
+
+            <div class="inline-checks">
+                <label class="checkline compact-check">
+                    <input asp-for="Input.RespondsEmails" />
+                    <span>Respondo emails</span>
+                </label>
+                <label class="checkline compact-check">
+                    <input asp-for="Input.AcceptsCalls" />
+                    <span>Atiendo llamadas</span>
+                </label>
+                <label class="checkline compact-check">
+                    <input asp-for="Input.RespondsWhatsApp" />
+                    <span>Respondo WhatsApp</span>
+                </label>
+            </div>
+            <span class="field-hint">Solo se mostraran en la publicacion los datos de contacto que marques.</span>
+        </div>
+
+        <div class="register-row">
+            <label>
+                <span>Contrasena</span>
+                <input asp-for="Input.Password" type="password" autocomplete="new-password" />
+                <span asp-validation-for="Input.Password" class="text-danger"></span>
+            </label>
+        </div>
+
+        <div class="register-row">
+            <label>
+                <span>Repetir contrasena</span>
+                <input asp-for="Input.ConfirmPassword" type="password" autocomplete="new-password" />
+                <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+            </label>
+        </div>
+
         <div class="hero-actions">
             <button type="submit" class="primary-pill">Crear cuenta</button>
             @if (Model.IsGoogleEnabled)

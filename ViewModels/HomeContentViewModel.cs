@@ -5,6 +5,7 @@ namespace Ventagram.ViewModels;
 public class HomeContentViewModel
 {
     public string Group { get; set; } = "Inmuebles";
+    public List<PublicationGroupType> GroupOptions { get; set; } = [];
     public string Mode { get; set; } = "Galeria";
     public string? Query { get; set; }
     public string MapTilerKey { get; set; } = string.Empty;

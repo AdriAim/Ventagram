@@ -9,21 +9,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/Ventagram.styles.css" asp-append-version="true" />
 </head>
 <body>
     <div class="page-backdrop"></div>
     <header class="site-header">
         <nav class="site-nav">
             <a class="brand-lockup" asp-page="/Index">
-                <img class="brand-mark" src="~/images/logo4.png" alt="Ventagram" />
+                <img class="brand-mark" src="~/images/logo5.png" alt="Ventagram" />
                 <span class="brand-text">
                     <strong>Ventagram</strong>
                     <small>Publicaciones con mapa y criterio</small>
                 </span>
             </a>
             <div class="nav-links">
-                <a asp-page="/Index">Explorar</a>
+                <a asp-page="/Index" asp-route-mode="Galeria" asp-fragment="gallery-first">Explorar</a>
                 <a asp-page="/Publications/Create">Publicar</a>
                 <a asp-page="/Trash">Papelera</a>
                 <a asp-page="/Publications/DeleteAnonymous">Baja anónima</a>
@@ -49,7 +48,7 @@
     </main>
     <footer class="site-footer">
         <div class="footer-brand">
-            <img class="footer-mark" src="~/images/logo4.png" alt="Ventagram" />
+            <img class="footer-mark" src="~/images/logo5.png" alt="Ventagram" />
             <div>
                 <strong>Ventagram</strong>
                 <p>Basta de anuncios sin precios. La comunidad denuncia, vota y manda avisos a la papelera.</p>

@@ -53,10 +53,11 @@ public class LoginModel(AuthService authService, IConfiguration configuration) :
 
     public class InputModel
     {
-        [Required, EmailAddress]
+        [Required(ErrorMessage = "Ingresá tu email.")]
+        [EmailAddress(ErrorMessage = "Ingresá un email válido.")]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
+        [Required(ErrorMessage = "Ingresá tu contraseña.")]
         public string Password { get; set; } = string.Empty;
     }
 }

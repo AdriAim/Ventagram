@@ -6,8 +6,7 @@ public class Publication
 {
     public int Id { get; set; }
 
-    [StringLength(30)]
-    public string Group { get; set; } = string.Empty;
+    public PublicationGroup Group { get; set; } = PublicationGroup.Inmuebles;
 
     [StringLength(80)]
     public string Category { get; set; } = string.Empty;

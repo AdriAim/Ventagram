@@ -5,12 +5,13 @@ namespace Ventagram.Services;
 
 public class ReportService(VentagramDbContext db)
 {
-    public async Task CreateAsync(int publicationId, string reason)
+    public async Task CreateAsync(int publicationId, int reasonId, string? comment)
     {
         db.PublicationReports.Add(new PublicationReport
         {
             PublicationId = publicationId,
-            Reason = reason
+            ReasonId = reasonId,
+            Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim()
         });
 
         await db.SaveChangesAsync();

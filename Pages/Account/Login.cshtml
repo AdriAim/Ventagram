@@ -8,16 +8,27 @@
     <div class="section-heading">
         <span class="eyebrow">Acceso</span>
         <h1>Ingresá a tu cuenta</h1>
-        <p>Podés entrar con email y contraseña o con Google si cargaste las credenciales.</p>
+        <p>Ingresá con email y contraseña.</p>
     </div>
 
     <form method="post" class="stack-form">
         <input type="hidden" asp-for="ReturnUrl" />
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        <div class="form-grid">
-            <label><span>Email</span><input asp-for="Input.Email" /></label>
-            <label><span>Contraseña</span><input asp-for="Input.Password" type="password" /></label>
+        <div class="register-row">
+            <label>
+                <span>Email</span>
+                <input asp-for="Input.Email" />
+                <span asp-validation-for="Input.Email" class="text-danger"></span>
+            </label>
         </div>
+        <div class="register-row">
+            <label>
+                <span>Contraseña</span>
+                <input asp-for="Input.Password" type="password" />
+                <span asp-validation-for="Input.Password" class="text-danger"></span>
+            </label>
+        </div>
+        <a class="field-hint" asp-page="/Account/ForgotPassword">¿Olvidaste tu contraseña?</a>
         <div class="hero-actions">
             <button type="submit" class="primary-pill">Ingresar</button>
             @if (Model.IsGoogleEnabled)

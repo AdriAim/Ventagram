@@ -6,6 +6,13 @@ using Ventagram.Models;
 using Ventagram.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuredUrls = builder.Configuration["urls"]
+    ?? builder.Configuration["ASPNETCORE_URLS"]
+    ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS")
+    ?? string.Empty;
+var hasHttpsUrlConfigured = configuredUrls
+    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Any(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
 
 builder.Services.AddRazorPages();
 builder.Services.AddControllersWithViews();
@@ -54,6 +61,10 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
                         Name = name,
                         Email = email.ToLower(),
                         Phone = string.Empty,
+                        RespondsEmails = false,
+                        AcceptsCalls = true,
+                        RespondsWhatsApp = true,
+                        ContactPreference = "Calls|WhatsApp",
                         PasswordHash = string.Empty,
                         AuthProvider = "Google"
                     };
@@ -67,6 +78,7 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
                     new(ClaimTypes.Name, user.Name),
                     new(ClaimTypes.Email, user.Email),
                     new("phone", user.Phone ?? string.Empty),
+                    new("contact-preference", BuildContactPreference(user.RespondsEmails, user.AcceptsCalls, user.RespondsWhatsApp)),
                     new("provider", user.AuthProvider)
                 };
 
@@ -81,8 +93,13 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 }
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddDataProtection();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddSingleton<CloudflareR2ImageStorageService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PublicationService>();
+builder.Services.AddScoped<PublicationGroupTypeService>();
+builder.Services.AddScoped<PublicationCategoryService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
 
@@ -92,16 +109,32 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<VentagramDbContext>();
     db.Database.EnsureCreated();
+    await EnsureArgentineLocalitiesTableAsync(db);
+    await EnsurePublicationGroupTypesTableAsync(db);
+    await EnsureUserLocalityColumnAsync(db);
+    await SeedArgentineLocalitiesAsync(db);
+    await EnsurePublicationGroupColumnAsync(db);
+    await EnsureUserContactColumnsAsync(db);
+    await EnsurePublicationCategoriesTableAsync(db);
+    await EnsurePublicationReportReasonsTableAsync(db);
     await SeedData.InitializeAsync(db);
+    await EnsurePublicationReportReasonIdColumnAsync(db);
+    await EnsurePublicationReportCommentColumnAsync(db);
 }
 
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    app.UseHsts();
+    if (hasHttpsUrlConfigured)
+    {
+        app.UseHsts();
+    }
 }
 
-app.UseHttpsRedirection();
+if (hasHttpsUrlConfigured)
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
@@ -109,3 +142,426 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapRazorPages();
 app.Run();
+
+static async Task EnsureUserContactColumnsAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "Users", "RespondsEmails", "bit(1) NOT NULL DEFAULT b'0'");
+        await EnsureColumnAsync(connection, "Users", "AcceptsCalls", "bit(1) NOT NULL DEFAULT b'0'");
+        await EnsureColumnAsync(connection, "Users", "RespondsWhatsApp", "bit(1) NOT NULL DEFAULT b'0'");
+
+        await using var backfill = connection.CreateCommand();
+        backfill.CommandText = """
+            UPDATE Users
+            SET
+                RespondsEmails = CASE WHEN COALESCE(ContactPreference, '') LIKE '%Email%' THEN 1 ELSE RespondsEmails END,
+                AcceptsCalls = CASE WHEN COALESCE(ContactPreference, '') LIKE '%Calls%' THEN 1 ELSE AcceptsCalls END,
+                RespondsWhatsApp = CASE WHEN COALESCE(ContactPreference, '') LIKE '%WhatsApp%' THEN 1 ELSE RespondsWhatsApp END
+            """;
+        await backfill.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationGroupColumnAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var check = connection.CreateCommand();
+        check.CommandText = """
+            SELECT DATA_TYPE
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'Publications'
+              AND COLUMN_NAME = 'Group'
+            LIMIT 1
+            """;
+
+        var existingType = Convert.ToString(await check.ExecuteScalarAsync())?.ToLowerInvariant();
+        if (existingType is "tinyint" or "smallint" or "mediumint" or "int" or "bigint")
+        {
+            return;
+        }
+
+        await using var backfill = connection.CreateCommand();
+        backfill.CommandText = """
+            UPDATE Publications
+            SET `Group` = CASE `Group`
+                WHEN 'Inmuebles' THEN 1
+                WHEN 'Rodados' THEN 2
+                WHEN 'Generales' THEN 3
+                ELSE 1
+            END
+            """;
+        await backfill.ExecuteNonQueryAsync();
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = """
+            ALTER TABLE Publications
+            MODIFY COLUMN `Group` TINYINT UNSIGNED NOT NULL
+            """;
+        await alter.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureColumnAsync(System.Data.Common.DbConnection connection, string tableName, string columnName, string definition)
+{
+    await using var check = connection.CreateCommand();
+    check.CommandText = """
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = @tableName
+          AND COLUMN_NAME = @columnName
+        """;
+    var tableParameter = check.CreateParameter();
+    tableParameter.ParameterName = "@tableName";
+    tableParameter.Value = tableName;
+    check.Parameters.Add(tableParameter);
+    var parameter = check.CreateParameter();
+    parameter.ParameterName = "@columnName";
+    parameter.Value = columnName;
+    check.Parameters.Add(parameter);
+
+    var exists = Convert.ToInt32(await check.ExecuteScalarAsync()) > 0;
+    if (exists)
+    {
+        return;
+    }
+
+    await using var alter = connection.CreateCommand();
+    alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition}";
+    await alter.ExecuteNonQueryAsync();
+}
+
+static async Task EnsureUserLocalityColumnAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "Users", "ArgentineLocalityId", "int NULL");
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureArgentineLocalitiesTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS ArgentineLocalities (
+                Id INT NOT NULL AUTO_INCREMENT,
+                Locality VARCHAR(120) NOT NULL,
+                Province VARCHAR(120) NOT NULL,
+                Latitude DOUBLE NOT NULL,
+                Longitude DOUBLE NOT NULL,
+                SortOrder INT NOT NULL DEFAULT 0,
+                IsActive BIT(1) NOT NULL DEFAULT b'1',
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_ArgentineLocalities_Province_Locality (Province, Locality)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationGroupTypesTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS PublicationGroupTypes (
+                Id TINYINT UNSIGNED NOT NULL,
+                Name VARCHAR(120) NOT NULL,
+                SortOrder INT NOT NULL DEFAULT 0,
+                IsActive BIT(1) NOT NULL DEFAULT b'1',
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_PublicationGroupTypes_Name (Name)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task SeedArgentineLocalitiesAsync(VentagramDbContext db)
+{
+    var existingKeys = new HashSet<string>(
+        await db.ArgentineLocalities
+            .Select(x => $"{x.Province}|{x.Locality}")
+            .ToListAsync(),
+        StringComparer.OrdinalIgnoreCase);
+
+    var missing = ArgentineLocalityCatalog.All
+        .Where(x => !existingKeys.Contains($"{x.Province}|{x.Locality}"))
+        .Select(x => new ArgentineLocality
+        {
+            Locality = x.Locality,
+            Province = x.Province,
+            Latitude = x.Latitude,
+            Longitude = x.Longitude,
+            SortOrder = x.SortOrder,
+            IsActive = x.IsActive
+        })
+        .ToList();
+
+    if (missing.Count == 0)
+    {
+        return;
+    }
+
+    db.ArgentineLocalities.AddRange(missing);
+    await db.SaveChangesAsync();
+}
+
+static async Task EnsurePublicationCategoriesTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS PublicationCategories (
+                Id INT NOT NULL AUTO_INCREMENT,
+                `Group` TINYINT UNSIGNED NOT NULL,
+                Name VARCHAR(120) NOT NULL,
+                SortOrder INT NOT NULL DEFAULT 0,
+                IsActive BIT(1) NOT NULL DEFAULT b'1',
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_PublicationCategories_Group_Name (`Group`, Name)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationReportReasonsTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS PublicationReportReasons (
+                Id INT NOT NULL AUTO_INCREMENT,
+                Name VARCHAR(120) NOT NULL,
+                SortOrder INT NOT NULL DEFAULT 0,
+                IsActive BIT(1) NOT NULL DEFAULT b'1',
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_PublicationReportReasons_Name (Name)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationReportReasonIdColumnAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "PublicationReports", "ReasonId", "INT NULL");
+
+        var hasLegacyReasonColumn = false;
+        await using (var checkReason = connection.CreateCommand())
+        {
+            checkReason.CommandText = """
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'PublicationReports'
+                  AND COLUMN_NAME = 'Reason'
+                """;
+
+            hasLegacyReasonColumn = Convert.ToInt32(await checkReason.ExecuteScalarAsync()) > 0;
+        }
+
+        if (hasLegacyReasonColumn)
+        {
+            await using var backfill = connection.CreateCommand();
+            backfill.CommandText = """
+                UPDATE PublicationReports pr
+                LEFT JOIN PublicationReportReasons rr
+                  ON rr.Name = CASE
+                      WHEN COALESCE(pr.Reason, '') = 'Sin precio' THEN 'Precio no corresponde'
+                      ELSE COALESCE(pr.Reason, '')
+                  END
+                SET pr.ReasonId = COALESCE(rr.Id, 1)
+                WHERE pr.ReasonId IS NULL
+                """;
+            await backfill.ExecuteNonQueryAsync();
+
+            await using var dropReason = connection.CreateCommand();
+            dropReason.CommandText = "ALTER TABLE PublicationReports DROP COLUMN Reason";
+            await dropReason.ExecuteNonQueryAsync();
+        }
+
+        if (!hasLegacyReasonColumn)
+        {
+            await using var setDefault = connection.CreateCommand();
+            setDefault.CommandText = """
+                UPDATE PublicationReports
+                SET ReasonId = COALESCE(ReasonId, 1)
+                """;
+            await setDefault.ExecuteNonQueryAsync();
+        }
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = """
+            ALTER TABLE PublicationReports
+            MODIFY COLUMN ReasonId INT NOT NULL
+            """;
+        await alter.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationReportCommentColumnAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "PublicationReports", "Comment", "VARCHAR(500) NULL");
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static string BuildContactPreference(bool respondsEmails, bool acceptsCalls, bool respondsWhatsApp)
+{
+    var preferences = new List<string>();
+    if (respondsEmails)
+    {
+        preferences.Add("Email");
+    }
+
+    if (acceptsCalls)
+    {
+        preferences.Add("Calls");
+    }
+
+    if (respondsWhatsApp)
+    {
+        preferences.Add("WhatsApp");
+    }
+
+    return preferences.Count == 0 ? "None" : string.Join("|", preferences);
+}
