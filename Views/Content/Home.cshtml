@@ -1,4 +1,4 @@
-@model HomeContentViewModel
+﻿@model HomeContentViewModel
 @{
     var currentMode = string.IsNullOrWhiteSpace(Model.Mode) ? "Galeria" : Model.Mode;
     var currentGroup = string.IsNullOrWhiteSpace(Model.Group) ? "Inmuebles" : Model.Group;
@@ -8,7 +8,7 @@
     <div class="hero-copy">
         <span class="eyebrow">Ventagram en comunidad</span>
         <h1>Basta de <span>anuncios sin precios</span>.</h1>
-        <p>Busc� por galer�a de fotos, clasificados en texto o mapa de ubicaciones para encontrar el aviso que te interesa.</p>
+        <p>Buscá por galería de fotos, clasificados en texto o mapa de ubicaciones para encontrar el aviso que te interesa.</p>
         <div class="hero-actions">
             <a class="primary-pill" href="/Publications/Create">Publicar ahora</a>
             <a class="ghost-pill" href="/Trash">Ver papelera</a>
@@ -17,8 +17,8 @@
     <div class="hero-visual">
         <div class="hero-stat">
             <div class="hero-stat-copy">
-                <strong>B�squeda por galer�a, texto o mapa</strong>
-                <span>Explor� fotos en galer�a, clasificados en texto y ubicaciones sobre el mapa desde una sola portada.</span>
+                <strong>Búsqueda por galería, texto o mapa</strong>
+                <span>Explorá fotos en galería, clasificados en texto y ubicaciones sobre el mapa desde una sola portada.</span>
             </div>
             <img class="hero-stat-logo" src="~/images/logo5.png" alt="Logo de Ventagram" />
         </div>
@@ -27,13 +27,13 @@
 
 <section class="status-banner civic-banner">
     <strong>La comunidad decide.</strong>
-    <span>Los anuncios denunciados aparecen en la papelera para que todos vean qu� publicaciones fueron marcadas.</span>
+    <span>Los anuncios denunciados aparecen en la papelera para que todos vean qué publicaciones fueron marcadas.</span>
 </section>
 
 <section class="search-panel">
     <form method="get" action="/" class="search-grid">
         <label>
-            <span>Qu� buscás</span>
+            <span>Qué buscás</span>
             <input name="query" value="@Model.Query" placeholder="Ej. departamento, Ford Fiesta, iPhone" />
         </label>
         <label>
@@ -85,8 +85,8 @@
 @if (!Model.Publications.Any())
 {
     <section class="empty-state">
-        <h2>No hay resultados para esa búsqueda.</h2>
-        <p>Ajustá el grupo o la palabra clave para ver publicaciones activas.</p>
+        <h2>No hay resultados para esa bÃºsqueda.</h2>
+        <p>AjustÃ¡ el grupo o la palabra clave para ver publicaciones activas.</p>
     </section>
 }
 else if (currentMode == "Mapa")
@@ -99,7 +99,7 @@ else if (currentMode == "Mapa")
             {
                 <div class="map-placeholder">
                     <h2>Mapa listo para MapTiler</h2>
-                    <p>Cargá <code>MapTiler:ApiKey</code> en <code>appsettings.json</code> para activar el mapa interactivo.</p>
+                    <p>CargÃ¡ <code>MapTiler:ApiKey</code> en <code>appsettings.json</code> para activar el mapa interactivo.</p>
                 </div>
             }
         </div>
@@ -107,9 +107,16 @@ else if (currentMode == "Mapa")
             @foreach (var item in Model.Publications)
             {
                 <article class="map-card">
-                    <img src="@item.ImageList.FirstOrDefault()" alt="@item.Title" />
+                    @if (!string.IsNullOrWhiteSpace(item.VideoUrl))
+                    {
+                        <video src="@item.VideoUrl" preload="metadata" muted playsinline></video>
+                    }
+                    else
+                    {
+                        <img src="@item.ImageList.FirstOrDefault()" alt="@item.Title" />
+                    }
                     <div>
-                        <span class="card-meta">@item.Category · @item.Locality</span>
+                        <span class="card-meta">@(item.Category?.Name ?? "Sin categoria") Â· @item.Locality</span>
                         <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
                         <p>@item.ShortDescription</p>
                         <strong>@item.Currency @item.Price.ToString("N0")</strong>
@@ -127,7 +134,7 @@ else if (currentMode == "Texto")
             var publicationCode = item.ToAdCode();
             <article class="classified-row">
                 <div>
-                    <span class="card-meta">@item.Group · @item.Category · @item.Locality</span>
+                    <span class="card-meta">@item.Group Â· @(item.Category?.Name ?? "Sin categoria") Â· @item.Locality</span>
                     <h3><a href="/Publications/Details/@item.Id" class="publication-preview-trigger" data-publication-id="@item.Id" data-details-url="/api/content/details/@item.Id">@item.Title</a></h3>
                     <p>@item.ShortDescription</p>
                 </div>
@@ -144,7 +151,7 @@ else
     <section class="gallery-shell">
         <div class="gallery-header">
             <div>
-                <span class="gallery-kicker">Vista galería</span>
+                <span class="gallery-kicker">Vista galerÃ­a</span>
                 <h2>@currentGroup populares en @Model.Publications.First().Locality</h2>
             </div>
         </div>
@@ -156,11 +163,20 @@ else
             var publicationCode = item.ToAdCode();
             var galleryTitle = item.Title.Split(" - oportunidad", StringSplitOptions.TrimEntries)[0];
             var galleryImages = item.ImageList.Take(11).ToList();
+            var hasVideo = !string.IsNullOrWhiteSpace(item.VideoUrl);
                 <article class="listing-card listing-card-compact" id="@(galleryIndex == 0 ? "gallery-first" : null)">
-                    <a href="/Publications/Details/@item.Id" class="card-image-wrap publication-preview-trigger" data-publication-id="@item.Id" data-details-url="/api/content/details/@item.Id">
-                        <img src="@galleryImages.FirstOrDefault()" alt="@item.Title" class="gallery-carousel-image" data-images="@string.Join("|||", galleryImages)" data-index="0" />
+                    <a href="/Publications/Details/@item.Id" class="card-image-wrap publication-preview-trigger" data-publication-id="@item.Id" data-details-url="/api/content/details/@item.Id" data-images="@string.Join("|||", galleryImages)" data-video-url="@item.VideoUrl" data-media-index="@(hasVideo ? 0 : 0)">
+                        @if (hasVideo)
+                        {
+                            <video src="@item.VideoUrl" class="gallery-carousel-video" preload="metadata" muted playsinline></video>
+                            <span class="gallery-video-badge" aria-hidden="true">Video</span>
+                        }
+                        else
+                        {
+                            <img src="@galleryImages.FirstOrDefault()" alt="@item.Title" class="gallery-carousel-image" />
+                        }
                         <span class="gallery-badge">@item.Currency @item.Price.ToString("N0")</span>
-                        @if (galleryImages.Count > 1)
+                        @if (galleryImages.Count + (hasVideo ? 1 : 0) > 1)
                         {
                             <button type="button" class="gallery-nav gallery-nav-prev" data-direction="-1" aria-label="Foto anterior">&#8249;</button>
                             <button type="button" class="gallery-nav gallery-nav-next" data-direction="1" aria-label="Foto siguiente">&#8250;</button>
@@ -174,5 +190,7 @@ else
         </div>
     </section>
 }
+
+
 
 

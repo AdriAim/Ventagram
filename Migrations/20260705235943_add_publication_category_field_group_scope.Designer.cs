@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ventagram.Data;
 
@@ -11,9 +12,11 @@ using Ventagram.Data;
 namespace Ventagram.Migrations
 {
     [DbContext(typeof(VentagramDbContext))]
-    partial class VentagramDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260705235943_add_publication_category_field_group_scope")]
+    partial class add_publication_category_field_group_scope
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

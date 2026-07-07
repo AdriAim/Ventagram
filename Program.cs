@@ -100,6 +100,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<PublicationService>();
 builder.Services.AddScoped<PublicationGroupTypeService>();
 builder.Services.AddScoped<PublicationCategoryService>();
+builder.Services.AddScoped<PublicationCategoryFieldService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
 
@@ -116,8 +117,13 @@ using (var scope = app.Services.CreateScope())
     await EnsurePublicationGroupColumnAsync(db);
     await EnsureUserContactColumnsAsync(db);
     await EnsurePublicationCategoriesTableAsync(db);
+    await EnsurePublicationCategoryFieldsTableAsync(db);
+    await EnsurePublicationFieldValuesTableAsync(db);
+    await EnsurePublicationVideoUrlColumnAsync(db);
+    await EnsurePublicationCategoryIdColumnAsync(db);
     await EnsurePublicationReportReasonsTableAsync(db);
     await SeedData.InitializeAsync(db);
+    await EnsurePublicationCategoryIdColumnAsync(db);
     await EnsurePublicationReportReasonIdColumnAsync(db);
     await EnsurePublicationReportCommentColumnAsync(db);
 }
@@ -417,6 +423,102 @@ static async Task EnsurePublicationCategoriesTableAsync(VentagramDbContext db)
     }
 }
 
+static async Task EnsurePublicationCategoryIdColumnAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "Publications", "CategoryId", "INT NULL");
+
+        await using (var categoryCountCheck = connection.CreateCommand())
+        {
+            categoryCountCheck.CommandText = """
+                SELECT COUNT(*)
+                FROM PublicationCategories
+                """;
+
+            var categoryCount = Convert.ToInt32(await categoryCountCheck.ExecuteScalarAsync());
+            if (categoryCount == 0)
+            {
+                return;
+            }
+        }
+
+        var hasLegacyCategoryColumn = false;
+        await using (var checkLegacyCategory = connection.CreateCommand())
+        {
+            checkLegacyCategory.CommandText = """
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'Publications'
+                  AND COLUMN_NAME = 'Category'
+                """;
+
+            hasLegacyCategoryColumn = Convert.ToInt32(await checkLegacyCategory.ExecuteScalarAsync()) > 0;
+        }
+
+        if (hasLegacyCategoryColumn)
+        {
+            await using var backfillExact = connection.CreateCommand();
+            backfillExact.CommandText = """
+                UPDATE Publications p
+                LEFT JOIN PublicationCategories c
+                  ON c.`Group` = p.`Group`
+                 AND c.Name = COALESCE(p.Category, '')
+                SET p.CategoryId = c.Id
+                WHERE p.CategoryId IS NULL OR p.CategoryId = 0
+                """;
+            await backfillExact.ExecuteNonQueryAsync();
+        }
+
+        await using (var backfillFallback = connection.CreateCommand())
+        {
+            backfillFallback.CommandText = """
+                UPDATE Publications p
+                JOIN (
+                    SELECT `Group`, MIN(Id) AS CategoryId
+                    FROM PublicationCategories
+                    WHERE IsActive = b'1'
+                    GROUP BY `Group`
+                ) c ON c.`Group` = p.`Group`
+                SET p.CategoryId = c.CategoryId
+                WHERE p.CategoryId IS NULL OR p.CategoryId = 0
+                """;
+            await backfillFallback.ExecuteNonQueryAsync();
+        }
+
+        await using (var alter = connection.CreateCommand())
+        {
+            alter.CommandText = """
+                ALTER TABLE Publications
+                MODIFY COLUMN CategoryId INT NOT NULL
+                """;
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (hasLegacyCategoryColumn)
+        {
+            await using var dropLegacyCategory = connection.CreateCommand();
+            dropLegacyCategory.CommandText = "ALTER TABLE Publications DROP COLUMN Category";
+            await dropLegacyCategory.ExecuteNonQueryAsync();
+        }
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
 static async Task EnsurePublicationReportReasonsTableAsync(VentagramDbContext db)
 {
     var connection = db.Database.GetDbConnection();
@@ -440,6 +542,105 @@ static async Task EnsurePublicationReportReasonsTableAsync(VentagramDbContext db
             )
             """;
         await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationCategoryFieldsTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS PublicationCategoryFields (
+                Id INT NOT NULL AUTO_INCREMENT,
+                CategoryId INT NOT NULL,
+                InternalName VARCHAR(80) NOT NULL,
+                Label VARCHAR(120) NOT NULL,
+                DataType TINYINT UNSIGNED NOT NULL,
+                Required BIT(1) NOT NULL DEFAULT b'0',
+                SortOrder INT NOT NULL DEFAULT 0,
+                IsActive BIT(1) NOT NULL DEFAULT b'1',
+                OptionsCsv VARCHAR(1000) NULL,
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_PublicationCategoryFields_Category_InternalName (CategoryId, InternalName),
+                KEY IX_PublicationCategoryFields_Category_Active_Order (CategoryId, IsActive, SortOrder)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationFieldValuesTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS PublicationFieldValues (
+                Id INT NOT NULL AUTO_INCREMENT,
+                PublicationId INT NOT NULL,
+                CategoryFieldId INT NOT NULL,
+                ValueText VARCHAR(500) NULL,
+                ValueNumber DECIMAL(18,2) NULL,
+                ValueBoolean BIT(1) NULL,
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_PublicationFieldValues_Publication_Field (PublicationId, CategoryFieldId),
+                KEY IX_PublicationFieldValues_Field_Text (CategoryFieldId, ValueText),
+                KEY IX_PublicationFieldValues_Field_Number (CategoryFieldId, ValueNumber),
+                KEY IX_PublicationFieldValues_Field_Boolean (CategoryFieldId, ValueBoolean)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsurePublicationVideoUrlColumnAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "Publications", "VideoUrl", "VARCHAR(400) NULL");
     }
     finally
     {

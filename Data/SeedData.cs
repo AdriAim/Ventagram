@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Ventagram.Models;
 using Ventagram.Services;
 
@@ -75,6 +75,73 @@ public static class SeedData
             "Accesorios nauticos"
         ])
     ];
+    private static readonly Dictionary<PublicationGroup, CategoryFieldSeed[]> CategoryFieldCatalog = new()
+    {
+        [PublicationGroup.Inmuebles] =
+        [
+            new("operacion", "Tipo de operacion", PublicationCategoryFieldDataType.Lista, true, 1,null,"Venta,Alquiler,Temporario"),
+            new("zona", "Zona", PublicationCategoryFieldDataType.Texto, false, 2),
+            new("superficie_total_m2", "Superficie total", PublicationCategoryFieldDataType.Numero, false, 3, "m2"),
+            new("superficie_cubierta_m2", "Superficie cubierta", PublicationCategoryFieldDataType.Numero, false, 4, "m2"),
+            new("ambientes", "Ambientes", PublicationCategoryFieldDataType.Texto, false, 5),
+            new("banios", "Banios", PublicationCategoryFieldDataType.Numero, false, 6),
+            new("direccion", "Direccion", PublicationCategoryFieldDataType.Texto, false, 7),
+            new("garage", "Garage", PublicationCategoryFieldDataType.Numero, false, 8),
+            new("antiguedad_anios", "Antiguedad", PublicationCategoryFieldDataType.Numero, false, 9, "anios"),
+            new("expensas", "Expensas", PublicationCategoryFieldDataType.Numero, false, 10, "ARS"),
+            new("estado", "Estado", PublicationCategoryFieldDataType.Texto, false, 11),
+            new("apto_credito", "Apto credito", PublicationCategoryFieldDataType.Booleano, false, 12),
+            new("uso_profesional", "Uso profesional", PublicationCategoryFieldDataType.Booleano, false, 13),
+            new("servicios", "Servicios", PublicationCategoryFieldDataType.Texto, false, 14),
+            new("amenities", "Amenities", PublicationCategoryFieldDataType.Texto, false, 15)
+        ],
+        [PublicationGroup.Rodados] =
+        [
+            new("tipo_vehiculo", "Tipo de vehiculo", PublicationCategoryFieldDataType.Lista, true, 1),
+            new("marca", "Marca", PublicationCategoryFieldDataType.Texto, true, 2),
+            new("modelo", "Modelo", PublicationCategoryFieldDataType.Texto, true, 3),
+            new("anio", "Anio", PublicationCategoryFieldDataType.Numero, true, 4, "anio"),
+            new("kilometros", "Kilometros", PublicationCategoryFieldDataType.Numero, false, 5, "km"),
+            new("combustible", "Combustible", PublicationCategoryFieldDataType.Texto, false, 6),
+            new("transmision", "Transmision", PublicationCategoryFieldDataType.Texto, false, 7),
+            new("version", "Version", PublicationCategoryFieldDataType.Texto, false, 8),
+            new("color", "Color", PublicationCategoryFieldDataType.Texto, false, 9),
+            new("patente", "Patente", PublicationCategoryFieldDataType.Texto, false, 10),
+            new("motor", "Motor", PublicationCategoryFieldDataType.Texto, false, 11),
+            new("traccion", "Traccion", PublicationCategoryFieldDataType.Texto, false, 12),
+            new("puertas", "Puertas", PublicationCategoryFieldDataType.Numero, false, 13),
+            new("titulares", "Titulares", PublicationCategoryFieldDataType.Numero, false, 14),
+            new("permuta", "Permuta", PublicationCategoryFieldDataType.Booleano, false, 15),
+            new("financiacion", "Financiacion", PublicationCategoryFieldDataType.Booleano, false, 16),
+            new("equipamiento", "Equipamiento", PublicationCategoryFieldDataType.Texto, false, 17),
+            new("estado_general", "Estado general", PublicationCategoryFieldDataType.Texto, false, 18)
+        ],
+        [PublicationGroup.Generales] =
+        [
+            new("subcategoria", "Subcategoria", PublicationCategoryFieldDataType.Texto, true, 1),
+            new("estado_articulo", "Estado", PublicationCategoryFieldDataType.Texto, false, 2),
+            new("marca", "Marca", PublicationCategoryFieldDataType.Texto, false, 3),
+            new("modelo", "Modelo", PublicationCategoryFieldDataType.Texto, false, 4),
+            new("sku", "SKU", PublicationCategoryFieldDataType.Texto, false, 5),
+            new("stock", "Stock", PublicationCategoryFieldDataType.Numero, false, 6, "unid"),
+            new("color", "Color", PublicationCategoryFieldDataType.Texto, false, 7),
+            new("medida", "Medida", PublicationCategoryFieldDataType.Texto, false, 8),
+            new("peso", "Peso", PublicationCategoryFieldDataType.Texto, false, 9),
+            new("dimensiones", "Dimensiones", PublicationCategoryFieldDataType.Texto, false, 10),
+            new("garantia", "Garantia", PublicationCategoryFieldDataType.Texto, false, 11),
+            new("envio", "Envio", PublicationCategoryFieldDataType.Texto, false, 12),
+            new("permuta", "Permuta", PublicationCategoryFieldDataType.Booleano, false, 13)
+        ],
+        [PublicationGroup.Embarcaciones] =
+        [
+            new("tipo_embarcacion", "Tipo de embarcacion", PublicationCategoryFieldDataType.Texto, true, 1),
+            new("marca", "Marca", PublicationCategoryFieldDataType.Texto, false, 2),
+            new("modelo", "Modelo", PublicationCategoryFieldDataType.Texto, false, 3),
+            new("anio", "Anio", PublicationCategoryFieldDataType.Numero, false, 4, "anio"),
+            new("eslora", "Eslora", PublicationCategoryFieldDataType.Texto, false, 5),
+            new("motor", "Motor", PublicationCategoryFieldDataType.Texto, false, 6)
+        ]
+    };
     private static readonly string[] PropertyGalleryPool =
     [
         "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80",
@@ -135,7 +202,8 @@ public static class SeedData
             .Select(x => new { Group = x.Key, Count = x.Count() })
             .ToDictionaryAsync(x => x.Group, x => x.Count);
 
-        var catalog = BuildCatalog(user);
+        var categoryLookup = await BuildCategoryLookupAsync(db);
+        var catalog = BuildCatalog(user, categoryLookup);
         var available = catalog
             .Where(x => !existingTitles.Contains(x.Title))
             .ToList();
@@ -265,12 +333,13 @@ public static class SeedData
         await db.SaveChangesAsync();
     }
 
-    private static List<Publication> BuildCatalog(ApplicationUser user)
+    private static List<Publication> BuildCatalog(ApplicationUser user, PublicationCategoryLookup categoryLookup)
     {
         var catalog = new List<Publication>
         {
             CreateProperty(
                 user,
+                categoryLookup,
                 "Depto 2 ambientes con balcon en Nueva Cordoba",
                 "Departamentos",
                 "Cordoba",
@@ -284,6 +353,7 @@ public static class SeedData
                 ("Apto credito", "Si")),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Casa 3 dormitorios con patio en Yerba Buena",
                 "Casas",
                 "Tucuman",
@@ -296,6 +366,7 @@ public static class SeedData
                 "Agua, Gas, Internet", "Quincho, Jardin, Parrilla"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Lote en barrio cerrado Las Tipas",
                 "Terrenos",
                 "Rosario",
@@ -308,6 +379,7 @@ public static class SeedData
                 "Electricidad, Agua", "Seguridad, Club House"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "PH reciclado de 2 dormitorios en La Plata",
                 "PH",
                 "La Plata",
@@ -320,6 +392,7 @@ public static class SeedData
                 "Agua, Cloacas, Gas", "Patio"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Monoambiente amoblado para alquiler temporal",
                 "Departamentos",
                 "Buenos Aires",
@@ -332,6 +405,7 @@ public static class SeedData
                 "Internet, Agua", "Laundry, Terraza"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Duplex a estrenar en Godoy Cruz",
                 "Duplex",
                 "Mendoza",
@@ -344,6 +418,7 @@ public static class SeedData
                 "Gas, Agua, Internet", "Patio, Cochera"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Oficina premium en microcentro",
                 "Oficinas",
                 "Cordoba",
@@ -356,6 +431,7 @@ public static class SeedData
                 "Internet, Luz, Agua", "Seguridad, Recepcion"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Campo de 12 hectareas con mejora",
                 "Campos",
                 "Entre Rios",
@@ -368,6 +444,7 @@ public static class SeedData
                 "Perforacion, Electricidad", "Casa de apoyo"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Casa quinta con pileta en Canning",
                 "Quintas",
                 "Buenos Aires",
@@ -380,6 +457,7 @@ public static class SeedData
                 "Luz, Agua, Internet", "Pileta, Quincho, Parque"),
             CreateProperty(
                 user,
+                categoryLookup,
                 "Local comercial sobre avenida principal",
                 "Locales",
                 "Mar del Plata",
@@ -393,6 +471,7 @@ public static class SeedData
 
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Ford Fiesta SE 2018",
                 "Autos",
                 "Rosario",
@@ -406,6 +485,7 @@ public static class SeedData
                 ("Sensores", "Si")),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Toyota Hilux SRX 2021 4x4",
                 "Camionetas",
                 "Salta",
@@ -418,6 +498,7 @@ public static class SeedData
                 "4x4, Cuero, Camara, Navegador"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Volkswagen Gol Trend 2016",
                 "Autos",
                 "Cordoba",
@@ -430,6 +511,7 @@ public static class SeedData
                 "Aire, Direccion, Stereo"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Honda Wave S 110 2023",
                 "Motos",
                 "La Plata",
@@ -442,6 +524,7 @@ public static class SeedData
                 "Alarma, Baulera"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Chevrolet Cruze LT 2020",
                 "Autos",
                 "Buenos Aires",
@@ -454,6 +537,7 @@ public static class SeedData
                 "Cuero, Techo, CarPlay"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Renault Kangoo 1.6 furgon 2017",
                 "Utilitarios",
                 "Mendoza",
@@ -466,6 +550,7 @@ public static class SeedData
                 "Aire, GNC, Porton lateral"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Peugeot 208 Allure 2022",
                 "Autos",
                 "Santa Fe",
@@ -478,6 +563,7 @@ public static class SeedData
                 "Camara, Pantalla, Llantas"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Yamaha MT-03 2021",
                 "Motos",
                 "Neuquen",
@@ -490,6 +576,7 @@ public static class SeedData
                 "ABS, Sliders, Parabrisas"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Citroen Berlingo Multispace 2015",
                 "Familiares",
                 "Parana",
@@ -502,6 +589,7 @@ public static class SeedData
                 "Aire, Direccion, Gran baul"),
             CreateVehicle(
                 user,
+                categoryLookup,
                 "Mercedes Benz Sprinter 415 2019",
                 "Utilitarios",
                 "Cordoba",
@@ -515,6 +603,7 @@ public static class SeedData
 
             CreateGeneral(
                 user,
+                categoryLookup,
                 "iPhone 13 128GB",
                 "Celulares",
                 "Buenos Aires",
@@ -528,6 +617,7 @@ public static class SeedData
                 ("Bateria", "88%")),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Notebook Lenovo IdeaPad 5 Ryzen 7",
                 "Computacion",
                 "Cordoba",
@@ -541,6 +631,7 @@ public static class SeedData
                 ("SSD", "512GB")),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Bicicleta mountain bike rodado 29",
                 "Deportes",
                 "Mendoza",
@@ -552,6 +643,7 @@ public static class SeedData
                 "Bicicletas", "Usado", "Venzo", "R29", "Sin garantia", "Retiro"),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Sillon esquinero 5 cuerpos",
                 "Hogar",
                 "Rosario",
@@ -563,6 +655,7 @@ public static class SeedData
                 "Muebles", "Usado", "Nordico", "Esquinero", "Sin garantia", "Retiro a coordinar"),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "PlayStation 5 con joystick extra",
                 "Gaming",
                 "La Plata",
@@ -575,6 +668,7 @@ public static class SeedData
                 ("Joystick extra", "Si")),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Heladera no frost 430 litros",
                 "Electrodomesticos",
                 "Mar del Plata",
@@ -586,6 +680,7 @@ public static class SeedData
                 "Heladeras", "Usado", "Samsung", "No Frost", "Sin garantia", "Retiro"),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Mesa de comedor de madera maciza",
                 "Hogar",
                 "Parana",
@@ -597,6 +692,7 @@ public static class SeedData
                 "Muebles", "Usado", "Roble", "Comedor", "Sin garantia", "Retiro"),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Camara Canon EOS Rebel T7",
                 "Fotografia",
                 "Salta",
@@ -608,6 +704,7 @@ public static class SeedData
                 "Camaras", "Usado", "Canon", "Rebel T7", "7 dias", "Envio"),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Set de herramientas 120 piezas",
                 "Ferreteria",
                 "Neuquen",
@@ -619,6 +716,7 @@ public static class SeedData
                 "Herramientas", "Usado", "Stanley", "120 piezas", "Sin garantia", "Envio"),
             CreateGeneral(
                 user,
+                categoryLookup,
                 "Cuna funcional con cajonera",
                 "Bebes",
                 "Santa Fe",
@@ -630,14 +728,14 @@ public static class SeedData
                 "Bebes", "Usado", "Infanti", "Funcional", "Sin garantia", "Retiro")
         };
 
-        catalog.AddRange(BuildGeneratedProperties(user));
-        catalog.AddRange(BuildGeneratedVehicles(user));
-        catalog.AddRange(BuildGeneratedGeneralPublications(user));
+        catalog.AddRange(BuildGeneratedProperties(user, categoryLookup));
+        catalog.AddRange(BuildGeneratedVehicles(user, categoryLookup));
+        catalog.AddRange(BuildGeneratedGeneralPublications(user, categoryLookup));
 
         return catalog;
     }
 
-    private static IEnumerable<Publication> BuildGeneratedProperties(ApplicationUser user)
+    private static IEnumerable<Publication> BuildGeneratedProperties(ApplicationUser user, PublicationCategoryLookup categoryLookup)
     {
         var cities = new[]
         {
@@ -712,6 +810,7 @@ public static class SeedData
 
             publications.Add(CreateProperty(
                 user,
+                categoryLookup,
                 $"{kind.PropertyType} {highlight} en {city.Zone} - oportunidad {i + 11:00}",
                 kind.Category,
                 city.Locality,
@@ -738,7 +837,7 @@ public static class SeedData
         return publications;
     }
 
-    private static IEnumerable<Publication> BuildGeneratedVehicles(ApplicationUser user)
+    private static IEnumerable<Publication> BuildGeneratedVehicles(ApplicationUser user, PublicationCategoryLookup categoryLookup)
     {
         var cities = new[]
         {
@@ -791,6 +890,7 @@ public static class SeedData
 
             publications.Add(CreateVehicle(
                 user,
+                categoryLookup,
                 $"{vehicle.Brand} {vehicle.Model} {year} - oportunidad {i + 11:00}",
                 vehicle.Category,
                 city.Locality,
@@ -817,7 +917,7 @@ public static class SeedData
         return publications;
     }
 
-    private static IEnumerable<Publication> BuildGeneratedGeneralPublications(ApplicationUser user)
+    private static IEnumerable<Publication> BuildGeneratedGeneralPublications(ApplicationUser user, PublicationCategoryLookup categoryLookup)
     {
         var cities = new[]
         {
@@ -863,6 +963,7 @@ public static class SeedData
 
             publications.Add(CreateGeneral(
                 user,
+                categoryLookup,
                 $"{item.Brand} {item.Model} - oportunidad {i + 11:00}",
                 item.Category,
                 city.Locality,
@@ -886,6 +987,7 @@ public static class SeedData
 
     private static Publication CreateProperty(
         ApplicationUser user,
+        PublicationCategoryLookup categoryLookup,
         string title,
         string category,
         string locality,
@@ -911,7 +1013,7 @@ public static class SeedData
         var publication = new Publication
         {
             Group = PublicationGroup.Inmuebles,
-            Category = category,
+            CategoryId = ResolveCategoryId(categoryLookup, PublicationGroup.Inmuebles, category),
             Title = title,
             Price = price,
             Currency = "USD",
@@ -927,28 +1029,13 @@ public static class SeedData
             Status = "Activa",
             Latitude = latitude,
             Longitude = longitude,
-            PropertyDetail = new PropertyDetail
-            {
-                PropertyType = propertyType,
-                Operation = operation,
-                Zone = zone,
-                TotalAreaM2 = totalArea,
-                CoveredAreaM2 = coveredArea,
-                RoomsOrBedrooms = rooms,
-                Bathrooms = bathrooms,
-                GarageSpaces = garageSpaces,
-                Condition = condition,
-                Services = services,
-                Amenities = amenities
-            }
         };
-
-        AddExtras(publication, extras);
         return publication;
     }
 
     private static Publication CreateVehicle(
         ApplicationUser user,
+        PublicationCategoryLookup categoryLookup,
         string title,
         string category,
         string locality,
@@ -974,7 +1061,7 @@ public static class SeedData
         var publication = new Publication
         {
             Group = PublicationGroup.Rodados,
-            Category = category,
+            CategoryId = ResolveCategoryId(categoryLookup, PublicationGroup.Rodados, category),
             Title = title,
             Price = price,
             Currency = "USD",
@@ -990,28 +1077,13 @@ public static class SeedData
             Status = "Activa",
             Latitude = latitude,
             Longitude = longitude,
-            VehicleDetail = new VehicleDetail
-            {
-                VehicleType = vehicleType,
-                Brand = brand,
-                Model = model,
-                Version = version,
-                Year = year,
-                Kilometers = kilometers,
-                Fuel = fuel,
-                Transmission = transmission,
-                Color = color,
-                GeneralCondition = condition,
-                Equipment = equipment
-            }
         };
-
-        AddExtras(publication, extras);
         return publication;
     }
 
     private static Publication CreateGeneral(
         ApplicationUser user,
+        PublicationCategoryLookup categoryLookup,
         string title,
         string category,
         string locality,
@@ -1032,7 +1104,7 @@ public static class SeedData
         var publication = new Publication
         {
             Group = PublicationGroup.Generales,
-            Category = category,
+            CategoryId = ResolveCategoryId(categoryLookup, PublicationGroup.Generales, category),
             Title = title,
             Price = price,
             Currency = "USD",
@@ -1048,31 +1120,106 @@ public static class SeedData
             Status = "Activa",
             Latitude = latitude,
             Longitude = longitude,
-            GeneralDetail = new GeneralDetail
-            {
-                Subcategory = subcategory,
-                ItemCondition = itemCondition,
-                Brand = brand,
-                Model = model,
-                Warranty = warranty,
-                Shipping = shipping
-            }
         };
-
-        AddExtras(publication, extras);
         return publication;
     }
 
-    private static void AddExtras(Publication publication, params (string Key, string Value)[] extras)
+    private static async Task<PublicationCategoryLookup> BuildCategoryLookupAsync(VentagramDbContext db)
     {
-        foreach (var extra in extras)
+        var categories = await db.PublicationCategories
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .Select(x => new { x.Id, x.Group, x.Name })
+            .ToListAsync();
+
+        var byKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var fallbackByGroup = new Dictionary<PublicationGroup, int>();
+
+        foreach (var category in categories)
         {
-            publication.ExtraAttributes.Add(new PublicationExtraAttribute
+            var key = $"{(byte)category.Group}|{NormalizeCategoryKey(category.Name)}";
+            byKey[key] = category.Id;
+
+            if (!fallbackByGroup.ContainsKey(category.Group))
             {
-                Key = extra.Key,
-                Value = extra.Value
-            });
+                fallbackByGroup[category.Group] = category.Id;
+            }
         }
+
+        return new PublicationCategoryLookup(byKey, fallbackByGroup);
+    }
+
+    private static int ResolveCategoryId(PublicationCategoryLookup lookup, PublicationGroup group, string category)
+    {
+        var key = $"{(byte)group}|{NormalizeCategoryKey(category)}";
+        if (lookup.ByKey.TryGetValue(key, out var id))
+        {
+            return id;
+        }
+
+        if (lookup.FallbackByGroup.TryGetValue(group, out id))
+        {
+            return id;
+        }
+
+        throw new InvalidOperationException($"No se encontro una categoria activa para el grupo {group}.");
+    }
+
+    private static string NormalizeCategoryKey(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    }
+
+    private static async Task BackfillDynamicFieldValuesAsync(VentagramDbContext db)
+    {
+        var publications = await db.Publications
+            .Include(x => x.Category)
+            .Include(x => x.FieldValues)
+            .ToListAsync();
+
+        var fieldDefinitions = await db.PublicationCategoryFields
+            .Where(x => x.IsActive)
+            .ToListAsync();
+
+        var definitionsByCategory = fieldDefinitions
+            .Where(x => x.CategoryId.HasValue)
+            .GroupBy(x => x.CategoryId)
+            .ToDictionary(
+                x => x.Key!.Value,
+                x => x.ToDictionary(y => y.InternalName, StringComparer.OrdinalIgnoreCase));
+
+        var changed = false;
+        foreach (var publication in publications)
+        {
+            if (!definitionsByCategory.TryGetValue(publication.CategoryId, out var fields))
+            {
+                continue;
+            }
+
+            foreach (var value in BuildBackfillValues(publication, fields))
+            {
+                if (publication.FieldValues.Any(x => x.CategoryFieldId == value.CategoryFieldId))
+                {
+                    continue;
+                }
+
+                publication.FieldValues.Add(value);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private static IEnumerable<PublicationFieldValue> BuildBackfillValues(
+        Publication publication,
+        IReadOnlyDictionary<string, PublicationCategoryField> fields)
+    {
+        return [];
     }
 
     private static async Task BackfillGalleryImagesAsync(VentagramDbContext db, int demoUserId)
@@ -1153,7 +1300,17 @@ public static class SeedData
     }
 
     private sealed record CitySeed(string Locality, string Zone, double Latitude, double Longitude);
+    private sealed record CategoryFieldSeed(
+        string InternalName,
+        string Label,
+        PublicationCategoryFieldDataType DataType,
+        bool Required,
+        int SortOrder,
+        string? Unit = null,
+        string? OptionsCsv = null);
     private sealed record PropertySeed(string Category, string PropertyType, string Operation);
     private sealed record VehicleSeed(string Category, string VehicleType, string Brand, string Model, string Transmission, string Fuel);
     private sealed record GeneralSeed(string Category, string Subcategory, string Brand, string Model, string Warranty, string Shipping);
+    private sealed record PublicationCategoryLookup(Dictionary<string, int> ByKey, Dictionary<PublicationGroup, int> FallbackByGroup);
 }
+

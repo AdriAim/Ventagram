@@ -7,6 +7,7 @@
     wirePhoneMasks(document);
     wireReportModal();
     wirePublicationPreviewModal();
+    wireDetailMediaOverlay();
     await loadApiPage();
   });
 
@@ -686,7 +687,7 @@
   }
 
   function syncCreateTitle(form) {
-    const category = String(form.querySelector('[name="category"]')?.value || "").trim();
+    const category = String(form.querySelector('[name="category"]')?.selectedOptions?.[0]?.textContent || "").trim();
     const locality = String(form.querySelector('input[name="locality"]')?.value || "").trim();
     const titleInput = form.querySelector('input[name="title"]');
     if (!titleInput) return;
@@ -705,13 +706,15 @@
     const price = escapeHtml(marker.price || "");
     const detailsUrl = escapeAttribute(marker.detailsUrl || "#");
     const publicationId = escapeAttribute(marker.id || "");
+    const videoUrl = escapeAttribute(marker.videoUrl || "");
     const images = Array.isArray(marker.images) && marker.images.length
       ? marker.images
       : [marker.image || "/images/logo4.png"];
     const escapedImages = images.map(image => escapeAttribute(image || "/images/logo4.png"));
     const firstImage = escapedImages[0];
     const galleryTitle = escapeHtml(String(marker.title || "").split(" - oportunidad")[0]);
-    const navButtons = escapedImages.length > 1
+    const mediaCount = escapedImages.length + (videoUrl ? 1 : 0);
+    const navButtons = mediaCount > 1
       ? `
           <button type="button" class="gallery-nav gallery-nav-prev" data-direction="-1" aria-label="Foto anterior">&#8249;</button>
           <button type="button" class="gallery-nav gallery-nav-next" data-direction="1" aria-label="Foto siguiente">&#8250;</button>
@@ -720,8 +723,10 @@
 
     return `
       <article class="map-popup-card listing-card listing-card-compact">
-        <a href="${detailsUrl}" class="card-image-wrap map-popup-image-wrap publication-preview-trigger" data-publication-id="${publicationId}" data-details-url="/api/content/details/${publicationId}">
-          <img src="${firstImage}" alt="${title}" class="gallery-carousel-image" data-images="${escapedImages.join("|||")}" data-index="0" />
+        <a href="${detailsUrl}" class="card-image-wrap map-popup-image-wrap publication-preview-trigger" data-publication-id="${publicationId}" data-details-url="/api/content/details/${publicationId}" data-images="${escapedImages.join("|||")}" data-video-url="${videoUrl}" data-media-index="0">
+          ${videoUrl
+            ? `<video src="${videoUrl}" class="gallery-carousel-video" preload="metadata" muted playsinline></video><span class="gallery-video-badge" aria-hidden="true">Video</span>`
+            : `<img src="${firstImage}" alt="${title}" class="gallery-carousel-image" />`}
           <span class="gallery-badge">${price}</span>
           ${navButtons}
           <button type="button" class="gallery-flag report-trigger" data-publication-id="${publicationId}" data-publication-code="${code}" data-publication-title="${title}" aria-label="Denunciar ${title}">Denunciar</button>
@@ -783,6 +788,40 @@
 
       request.ontimeout = () => {
         reject(new Error("La subida de imagenes agoto el tiempo de espera."));
+      };
+
+      request.send(formData);
+    });
+  }
+
+  function uploadVideoRequest(formData) {
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/content/upload-video", true);
+      request.setRequestHeader("X-Requested-With", "fetch");
+
+      request.onload = () => {
+        let payload = {};
+        try {
+          payload = request.responseText ? JSON.parse(request.responseText) : {};
+        } catch {
+          payload = {};
+        }
+
+        resolve({
+          ok: request.status >= 200 && request.status < 300,
+          status: request.status,
+          message: payload?.message,
+          url: payload?.url
+        });
+      };
+
+      request.onerror = () => {
+        reject(new Error("Fallo la conexion al subir el video desde este navegador."));
+      };
+
+      request.ontimeout = () => {
+        reject(new Error("La subida del video agoto el tiempo de espera."));
       };
 
       request.send(formData);
@@ -873,12 +912,80 @@
     });
   }
 
+  function wireDetailMediaOverlay() {
+    if (document.body.dataset.detailMediaOverlayBound === "true") return;
+
+    document.body.dataset.detailMediaOverlayBound = "true";
+
+    const closeOverlay = overlay => {
+      if (!overlay) return;
+      const body = overlay.querySelector("[data-detail-media-body]");
+      if (body) {
+        body.innerHTML = "";
+      }
+      overlay.hidden = true;
+      overlay.classList.remove("is-open");
+      document.body.classList.remove("preview-open");
+    };
+
+    document.addEventListener("click", event => {
+      const closeTrigger = event.target.closest("[data-detail-media-close='true']");
+      if (closeTrigger) {
+        const overlay = closeTrigger.closest("[data-detail-media-overlay]");
+        event.preventDefault();
+        event.stopPropagation();
+        closeOverlay(overlay);
+        return;
+      }
+
+      const trigger = event.target.closest(".detail-media-trigger");
+      if (!trigger) return;
+      if (!trigger.closest(".detail-gallery")) return;
+
+      event.preventDefault();
+
+      const detailGrid = trigger.closest(".detail-grid");
+      const siblingOverlay = detailGrid?.nextElementSibling?.matches?.("[data-detail-media-overlay]")
+        ? detailGrid.nextElementSibling
+        : null;
+      const overlay = siblingOverlay
+        || trigger.closest("#publicationPreviewBody")?.querySelector("[data-detail-media-overlay]")
+        || document.querySelector("[data-detail-media-overlay]");
+      const body = overlay?.querySelector("[data-detail-media-body]");
+      const caption = overlay?.querySelector("[data-detail-media-caption]");
+      const mediaType = trigger.getAttribute("data-detail-media-type") || "image";
+      const mediaSrc = trigger.getAttribute("data-detail-media-src") || trigger.getAttribute("src") || "";
+      const mediaTitle = stripOpportunitySuffix(trigger.getAttribute("data-detail-media-title") || trigger.getAttribute("alt") || "Vista ampliada");
+
+      if (!overlay || !body || !mediaSrc) return;
+
+      body.innerHTML = mediaType === "video"
+        ? `<video src="${escapeAttribute(mediaSrc)}" controls autoplay playsinline preload="metadata"></video>`
+        : `<img src="${escapeAttribute(mediaSrc)}" alt="${escapeAttribute(mediaTitle)}" />`;
+      if (caption) {
+        caption.textContent = mediaTitle || "Vista ampliada";
+      }
+
+      overlay.hidden = false;
+      overlay.classList.add("is-open");
+      document.body.classList.add("preview-open");
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      document.querySelectorAll("[data-detail-media-overlay].is-open").forEach(overlay => {
+        closeOverlay(overlay);
+      });
+    });
+  }
+
   function wireCreateForm() {
     const form = document.getElementById("createPublicationForm");
     if (!form || form.dataset.bound === "true") return;
 
     form.dataset.bound = "true";
     syncCreateTitle(form);
+    wireCreateSectionToggles(form);
 
     const groupInput = form.querySelector('[name="group"]');
     const categorySelect = form.querySelector("[data-category-select]");
@@ -889,24 +996,33 @@
       input?.addEventListener("change", () => syncCreateTitle(form));
     });
 
+    categorySelect?.addEventListener("change", async () => {
+      categorySelect.dataset.selectedCategoryId = categorySelect.value || "";
+      await reloadDynamicCategoryFields(form);
+      syncCreateTitle(form);
+    });
+
     groupInput?.addEventListener("change", async () => {
       await reloadCategoryOptions(form);
+      await reloadDynamicCategoryFields(form);
       syncCreateTitle(form);
     });
 
     const uploader = wireCreateImageUploader(form);
+    const videoUploader = wireCreateVideoUploader(form);
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
       clearCreateFormErrors(form);
 
       await uploader.waitForUploads();
+      await videoUploader.waitForUploads();
       const payload = serializeCreateForm(form);
       const feedback = document.getElementById("create-feedback");
 
-      if (uploader.hasPendingFiles()) {
+      if (uploader.hasPendingFiles() || videoUploader.hasPendingFiles()) {
         if (feedback) {
-          feedback.innerHTML = `<div class="status-banner warning">Espera a que termine la subida de imagenes.</div>`;
+          feedback.innerHTML = `<div class="status-banner warning">Espera a que terminen las subidas de imagenes y video.</div>`;
         }
         return;
       }
@@ -948,7 +1064,33 @@
       }
     });
 
-    reloadCategoryOptions(form, true);
+    reloadCategoryOptions(form, true)
+      .then(() => reloadDynamicCategoryFields(form));
+  }
+
+  function wireCreateSectionToggles(form) {
+    const toggles = form.querySelectorAll("[data-section-toggle]");
+    toggles.forEach(toggle => {
+      const section = toggle.closest("section");
+      const sectionKey = toggle.dataset.sectionToggle || "";
+      const heading = section?.querySelector("[data-section-heading]");
+      const body = section?.querySelector(`[data-section-body="${sectionKey}"]`);
+      const technicalPanel = form.querySelector("[data-technical-panel]");
+      if (!body) return;
+
+      const sync = () => {
+        if (heading) {
+          heading.hidden = false;
+          heading.querySelectorAll(":scope > *").forEach(node => {
+            node.hidden = false;
+          });
+        }
+        body.hidden = !toggle.checked;
+      };
+
+      toggle.addEventListener("change", sync);
+      sync();
+    });
   }
 
   function normalizeCreateFieldErrors(errors) {
@@ -993,6 +1135,7 @@
 
     const map = {
       Group: "group",
+      CategoryId: "category",
       Category: "category",
       Price: "price",
       Currency: "currency",
@@ -1001,7 +1144,8 @@
       Longitude: "locationSearch",
       ShortDescription: "shortDescription",
       LongDescription: "longDescription",
-      ImagesCsv: "imagesCsv"
+      ImagesCsv: "imagesCsv",
+      VideoUrl: "videoUrl"
     };
 
     if (map[bare]) return map[bare];
@@ -1079,7 +1223,7 @@
     if (!endpoint) return;
 
     const currentValue = preserveCurrentSelection
-      ? (categorySelect.dataset.selectedCategory || categorySelect.value || "").trim()
+      ? (categorySelect.dataset.selectedCategoryId || categorySelect.value || "").trim()
       : (categorySelect.value || "").trim();
 
     const response = await fetch(`${endpoint}?group=${encodeURIComponent(groupInput.value)}`, {
@@ -1097,7 +1241,7 @@
 
     options.forEach(item => {
       const option = document.createElement("option");
-      option.value = item.name || "";
+      option.value = item.id ? String(item.id) : "";
       option.textContent = item.name || "";
       if (option.value === currentValue) {
         option.selected = true;
@@ -1105,11 +1249,237 @@
       categorySelect.appendChild(option);
     });
 
-    if (currentValue && !options.some(item => item.name === currentValue)) {
+    if (currentValue && !options.some(item => String(item.id) === currentValue)) {
       categorySelect.value = "";
     }
 
-    categorySelect.dataset.selectedCategory = categorySelect.value || "";
+    categorySelect.dataset.selectedCategoryId = categorySelect.value || "";
+  }
+
+  async function reloadDynamicCategoryFields(form) {
+    const categorySelect = form.querySelector("[data-category-select]");
+    const requiredContainer = form.querySelector("[data-dynamic-required-fields-container]");
+    const optionalContainer = form.querySelector("[data-dynamic-optional-fields-container]");
+    const requiredEmptyNode = form.querySelector("[data-dynamic-required-fields-empty]");
+    const optionalEmptyNode = form.querySelector("[data-dynamic-optional-fields-empty]");
+    const technicalPanel = form.querySelector("[data-technical-panel]");
+    if (!categorySelect || !requiredContainer || !optionalContainer) return;
+
+    const previousValues = new Map([
+      ...collectDynamicFieldValues(requiredContainer),
+      ...collectDynamicFieldValues(optionalContainer)
+    ]);
+
+    const categoryId = String(categorySelect.value || "").trim();
+    const template = requiredContainer.dataset.categoryFieldsEndpointTemplate || optionalContainer.dataset.categoryFieldsEndpointTemplate || "";
+    if (!categoryId || !template) {
+      requiredContainer.querySelectorAll("[data-dynamic-field]").forEach(node => node.remove());
+      optionalContainer.querySelectorAll("[data-dynamic-field]").forEach(node => node.remove());
+      if (technicalPanel) {
+        technicalPanel.hidden = true;
+      }
+      if (requiredEmptyNode) {
+        requiredEmptyNode.hidden = false;
+      }
+      if (optionalEmptyNode) {
+        optionalEmptyNode.hidden = false;
+      }
+      return;
+    }
+
+    const endpoint = template.replace("__CATEGORY_ID__", encodeURIComponent(categoryId));
+    const response = await fetch(endpoint, {
+      headers: { "X-Requested-With": "fetch" }
+    });
+
+    requiredContainer.querySelectorAll("[data-dynamic-field]").forEach(node => node.remove());
+    optionalContainer.querySelectorAll("[data-dynamic-field]").forEach(node => node.remove());
+
+    if (!response.ok) {
+      if (technicalPanel) {
+        technicalPanel.hidden = true;
+      }
+      if (requiredEmptyNode) {
+        requiredEmptyNode.hidden = false;
+      }
+      if (optionalEmptyNode) {
+        optionalEmptyNode.hidden = false;
+      }
+      return;
+    }
+
+    const payload = await response.json();
+    const fields = Array.isArray(payload) ? payload : [];
+    if (!fields.length) {
+      if (technicalPanel) {
+        technicalPanel.hidden = true;
+      }
+      if (requiredEmptyNode) {
+        requiredEmptyNode.hidden = false;
+      }
+      if (optionalEmptyNode) {
+        optionalEmptyNode.hidden = false;
+      }
+      return;
+    }
+
+    const requiredFields = fields.filter(field => field.obligatorio);
+    const optionalFields = fields.filter(field => !field.obligatorio);
+
+    if (technicalPanel) {
+      technicalPanel.hidden = optionalFields.length === 0;
+    }
+
+    if (requiredEmptyNode) {
+      requiredEmptyNode.hidden = requiredFields.length > 0;
+      if (!requiredFields.length) {
+        requiredEmptyNode.textContent = "Esta categoria no tiene campos obligatorios adicionales.";
+      }
+    }
+
+    if (optionalEmptyNode) {
+      optionalEmptyNode.hidden = optionalFields.length > 0;
+      if (!optionalFields.length) {
+        optionalEmptyNode.textContent = "Esta categoria no tiene ficha tecnica opcional.";
+      }
+    }
+
+    requiredFields.forEach(field => {
+      requiredContainer.appendChild(buildDynamicFieldNode(field, previousValues.get(field.nombreInterno), "required"));
+    });
+
+    optionalFields.forEach(field => {
+      optionalContainer.appendChild(buildDynamicFieldNode(field, previousValues.get(field.nombreInterno), "optional"));
+    });
+  }
+
+  function collectDynamicFieldValues(container) {
+    const values = new Map();
+    container.querySelectorAll("[data-dynamic-field]").forEach(node => {
+      const internalName = node.getAttribute("data-field-container");
+      if (!internalName) return;
+
+      const input = node.querySelector("[data-dynamic-input]");
+      if (!input) return;
+
+      if (input.type === "checkbox") {
+        values.set(internalName, input.checked);
+        return;
+      }
+
+      values.set(internalName, input.value);
+    });
+
+    return values;
+  }
+
+  function buildDynamicFieldNode(field, currentValue, mode = "optional") {
+    const wrapper = document.createElement("label");
+    wrapper.dataset.dynamicField = "true";
+    wrapper.dataset.fieldContainer = field.nombreInterno || "";
+    const isRequiredMode = mode === "required";
+    wrapper.className = isRequiredMode
+      ? (field.tipoDato === "booleano" ? "checkline compact-check" : "")
+      : (field.tipoDato === "booleano" ? "checkline compact-check wide dynamic-field-inline" : "wide dynamic-field-inline");
+
+    const labelText = document.createElement("span");
+    labelText.textContent = field.obligatorio
+      ? `${field.etiqueta} *`
+      : field.etiqueta || field.nombreInterno || "Campo";
+
+    const error = document.createElement("span");
+    error.className = "field-error";
+    error.dataset.fieldError = field.nombreInterno || "";
+
+    let input;
+    switch (field.tipoDato) {
+      case "numero":
+        input = document.createElement("input");
+        input.type = "number";
+        input.step = "0.01";
+        input.value = currentValue ?? "";
+        break;
+      case "booleano":
+        input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = Boolean(currentValue);
+        break;
+      case "lista":
+        input = document.createElement("select");
+        {
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Selecciona una opcion";
+          input.appendChild(placeholder);
+
+          const options = Array.isArray(field.opciones) ? field.opciones : [];
+          options.forEach(optionValue => {
+            const option = document.createElement("option");
+            option.value = String(optionValue || "");
+            option.textContent = String(optionValue || "");
+            if (option.value === String(currentValue ?? "")) {
+              option.selected = true;
+            }
+            input.appendChild(option);
+          });
+        }
+        break;
+      default:
+        input = document.createElement("input");
+        input.type = "text";
+        input.value = currentValue ?? "";
+        break;
+    }
+
+    input.dataset.dynamicInput = "true";
+    input.dataset.fieldId = String(field.id || "");
+    input.dataset.fieldType = String(field.tipoDato || "texto");
+    input.dataset.internalName = String(field.nombreInterno || "");
+    input.name = `dynamic_${field.nombreInterno || field.id || createClientId()}`;
+
+    if (field.obligatorio) {
+      input.setAttribute("aria-required", "true");
+    }
+
+    const unit = String(field.unidad || "").trim();
+    if (!isRequiredMode && field.tipoDato !== "booleano" && unit) {
+      const fieldRow = document.createElement("div");
+      fieldRow.className = "field-input-with-unit";
+      fieldRow.appendChild(input);
+
+      const unitBadge = document.createElement("span");
+      unitBadge.className = "field-unit";
+      unitBadge.textContent = unit;
+      fieldRow.appendChild(unitBadge);
+
+      wrapper.appendChild(labelText);
+      wrapper.appendChild(fieldRow);
+      wrapper.appendChild(error);
+      return wrapper;
+    }
+
+    if (field.tipoDato === "booleano" && !isRequiredMode) {
+      const text = document.createElement("span");
+      text.textContent = field.obligatorio
+        ? `${field.etiqueta} *`
+        : field.etiqueta || field.nombreInterno || "Campo";
+      wrapper.appendChild(text);
+      wrapper.appendChild(input);
+      wrapper.appendChild(error);
+      return wrapper;
+    }
+
+    if (field.tipoDato === "booleano" && isRequiredMode) {
+      wrapper.appendChild(labelText);
+      wrapper.appendChild(input);
+      wrapper.appendChild(error);
+      return wrapper;
+    }
+
+    wrapper.appendChild(labelText);
+    wrapper.appendChild(input);
+    wrapper.appendChild(error);
+    return wrapper;
   }
 
   function wireCreateImageUploader(form) {
@@ -1296,6 +1666,188 @@
     };
   }
 
+  function wireCreateVideoUploader(form) {
+    const dropzone = form.querySelector("[data-video-dropzone]");
+    const input = form.querySelector("[data-create-video-input]");
+    const pickButton = form.querySelector("[data-create-video-pick]");
+    const clearButton = form.querySelector("[data-create-video-clear]");
+    const previews = form.querySelector("[data-video-previews]");
+    const statusNode = form.querySelector("[data-video-status]");
+    const videoUrlInput = form.querySelector('input[name="videoUrl"]');
+    const feedback = document.getElementById("create-feedback");
+
+    let state = null;
+    let uploadChain = Promise.resolve();
+
+    const updateHiddenValue = () => {
+      if (videoUrlInput) {
+        videoUrlInput.value = state?.uploadedUrl || "";
+      }
+    };
+
+    const render = () => {
+      if (statusNode) {
+        statusNode.textContent = state
+          ? (state.uploadedUrl ? "Video listo" : "Subiendo video...")
+          : "Sin video";
+      }
+
+      if (!previews) return;
+
+      if (!state) {
+        previews.innerHTML = `<div class="upload-preview upload-preview-empty upload-preview-video-empty"><span>Si subis un video, se mostrara primero en la publicacion.</span></div>`;
+        updateHiddenValue();
+        return;
+      }
+
+      previews.innerHTML = `
+        <article class="upload-preview upload-preview-video main">
+          <video src="${escapeAttribute(state.previewUrl)}" preload="metadata" muted playsinline controls></video>
+          <span class="gallery-badge">Video principal</span>
+          <span class="upload-status">${state.uploadedUrl ? "Listo" : "Subiendo..."}</span>
+          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-video-action="remove" aria-label="Quitar video">×</button>
+        </article>
+      `;
+
+      updateHiddenValue();
+    };
+
+    const clearState = () => {
+      if (state?.previewUrl) {
+        URL.revokeObjectURL(state.previewUrl);
+      }
+
+      state = null;
+      if (input) {
+        input.value = "";
+      }
+      render();
+    };
+
+    const validateVideoDuration = file => new Promise((resolve, reject) => {
+      const tempUrl = URL.createObjectURL(file);
+      const probe = document.createElement("video");
+      probe.preload = "metadata";
+      probe.onloadedmetadata = () => {
+        const duration = Number(probe.duration || 0);
+        URL.revokeObjectURL(tempUrl);
+        if (!Number.isFinite(duration) || duration <= 0) {
+          reject(new Error("No pudimos leer la duracion del video."));
+          return;
+        }
+
+        if (duration > 60) {
+          reject(new Error("El video no puede durar mas de 1 minuto."));
+          return;
+        }
+
+        resolve();
+      };
+      probe.onerror = () => {
+        URL.revokeObjectURL(tempUrl);
+        reject(new Error("No pudimos procesar ese archivo de video."));
+      };
+      probe.src = tempUrl;
+    });
+
+    const uploadFile = async file => {
+      if (!file?.type?.startsWith("video/")) {
+        throw new Error("Selecciona un archivo de video valido.");
+      }
+
+      await validateVideoDuration(file);
+      clearState();
+
+      state = {
+        id: createClientId(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        uploadedUrl: null
+      };
+      render();
+
+      const currentUpload = uploadChain.then(async () => {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const result = await uploadVideoRequest(formData);
+        if (!result.ok || !result.url) {
+          clearState();
+          throw new Error(result.message || "No se pudo subir el video.");
+        }
+
+        if (state) {
+          state.uploadedUrl = result.url;
+        }
+        render();
+      });
+
+      uploadChain = currentUpload.catch(() => {});
+      await currentUpload;
+    };
+
+    const consumeFileList = files => {
+      const file = Array.from(files || []).find(item => item.type.startsWith("video/"));
+      if (!file) {
+        return;
+      }
+
+      uploadFile(file).catch(error => {
+        clearState();
+        if (feedback) {
+          feedback.innerHTML = `<div class="status-banner warning">${escapeHtml(error.message || "No se pudo subir el video.")}</div>`;
+        }
+      });
+    };
+
+    pickButton?.addEventListener("click", event => {
+      event.preventDefault();
+      input?.click();
+    });
+
+    clearButton?.addEventListener("click", event => {
+      event.preventDefault();
+      clearState();
+    });
+
+    input?.addEventListener("change", () => {
+      if (input.files?.length) {
+        consumeFileList(input.files);
+      }
+    });
+
+    dropzone?.addEventListener("dragover", event => {
+      event.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+
+    dropzone?.addEventListener("dragleave", () => {
+      dropzone.classList.remove("is-dragover");
+    });
+
+    dropzone?.addEventListener("drop", event => {
+      event.preventDefault();
+      dropzone.classList.remove("is-dragover");
+      const files = event.dataTransfer?.files;
+      if (files?.length) {
+        consumeFileList(files);
+      }
+    });
+
+    previews?.addEventListener("click", event => {
+      const button = event.target.closest("[data-video-action='remove']");
+      if (!button) return;
+      clearState();
+    });
+
+    render();
+
+    return {
+      waitForUploads: () => uploadChain,
+      hasPendingFiles: () => Boolean(state && !state.uploadedUrl)
+    };
+  }
+
   function wireGalleryCards() {
     document.querySelectorAll(".gallery-nav").forEach(button => {
       if (button.dataset.bound === "true") return;
@@ -1306,24 +1858,11 @@
         event.stopPropagation();
 
         const card = button.closest(".card-image-wrap");
-        const image = card?.querySelector(".gallery-carousel-image");
-        if (!image) return;
-
-        const images = (image.dataset.images || "")
-          .split("|||")
-          .map(x => x.trim())
-          .filter(Boolean);
-
-        if (images.length <= 1) return;
-
         const direction = Number(button.dataset.direction || 1);
-        const currentIndex = Number(image.dataset.index || 0);
-        const nextIndex = (currentIndex + direction + images.length) % images.length;
-
-        image.src = images[nextIndex];
-        image.dataset.index = String(nextIndex);
+        advanceGalleryMedia(card, direction);
       });
     });
+
   }
 
   function wireDynamicGalleryCards() {
@@ -1338,33 +1877,122 @@
       event.stopPropagation();
 
       const card = button.closest(".card-image-wrap");
-      const image = card?.querySelector(".gallery-carousel-image");
-      if (!image) return;
-
-      const images = (image.dataset.images || "")
-        .split("|||")
-        .map(x => x.trim())
-        .filter(Boolean);
-
-      if (images.length <= 1) return;
-
       const direction = Number(button.dataset.direction || 1);
-      const currentIndex = Number(image.dataset.index || 0);
-      const nextIndex = (currentIndex + direction + images.length) % images.length;
-
-      image.src = images[nextIndex];
-      image.dataset.index = String(nextIndex);
+      advanceGalleryMedia(card, direction);
     });
+
+    document.addEventListener("mouseover", event => {
+      const video = event.target.closest(".gallery-carousel-video");
+      if (!video) return;
+      if (!video.closest(".card-image-wrap, .map-popup-card")) return;
+      video.play?.().catch(() => {});
+    });
+
+    document.addEventListener("mouseout", event => {
+      const video = event.target.closest(".gallery-carousel-video");
+      if (!video) return;
+      if (!video.closest(".card-image-wrap, .map-popup-card")) return;
+      video.pause?.();
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Some browsers block seeking while metadata is still loading.
+      }
+    });
+  }
+
+  function advanceGalleryMedia(card, direction) {
+    if (!card) return;
+
+    const images = (card.dataset.images || "")
+      .split("|||")
+      .map(x => x.trim())
+      .filter(Boolean);
+    const videoUrl = (card.dataset.videoUrl || "").trim();
+    const mediaCount = images.length + (videoUrl ? 1 : 0);
+
+    if (mediaCount <= 1) return;
+
+    const currentIndex = Number(card.dataset.mediaIndex || 0);
+    const nextIndex = (currentIndex + direction + mediaCount) % mediaCount;
+    const badge = card.querySelector(".gallery-video-badge");
+    const currentVideo = card.querySelector(".gallery-carousel-video");
+    const currentImage = card.querySelector(".gallery-carousel-image");
+
+    if (currentVideo) {
+      currentVideo.pause?.();
+      try {
+        currentVideo.currentTime = 0;
+      } catch {
+        // Some browsers block seeking while metadata is still loading.
+      }
+    }
+
+    if (nextIndex === 0 && videoUrl) {
+      if (currentImage) {
+        currentImage.remove();
+      }
+
+      let video = currentVideo;
+      if (!video) {
+        video = document.createElement("video");
+        video.className = "gallery-carousel-video";
+        video.preload = "metadata";
+        video.muted = true;
+        video.playsInline = true;
+        const anchor = badge || card.querySelector(".gallery-badge") || card.firstChild;
+        card.insertBefore(video, anchor);
+      }
+
+      video.src = videoUrl;
+      badge?.removeAttribute("hidden");
+    } else {
+      if (currentVideo) {
+        currentVideo.remove();
+      }
+
+      let image = currentImage;
+      if (!image) {
+        image = document.createElement("img");
+        image.className = "gallery-carousel-image";
+        image.alt = card.querySelector(".gallery-flag")?.dataset.publicationTitle || "";
+        const anchor = badge || card.querySelector(".gallery-badge") || card.firstChild;
+        card.insertBefore(image, anchor);
+      }
+
+      const imageIndex = videoUrl ? nextIndex - 1 : nextIndex;
+      image.src = images[imageIndex] || images[0] || "";
+      badge?.setAttribute("hidden", "hidden");
+    }
+
+    card.dataset.mediaIndex = String(nextIndex);
   }
 
   function serializeCreateForm(form) {
     const value = name => form.querySelector(`[name="${name}"]`)?.value ?? "";
     const checked = name => Boolean(form.querySelector(`[name="${name}"]`)?.checked);
     const noLocation = checked("noLocation");
+    const dynamicFields = Array.from(form.querySelectorAll("[data-dynamic-input]"))
+      .map(input => {
+        const fieldId = Number(input.dataset.fieldId || 0);
+        const fieldType = input.dataset.fieldType || "texto";
+        const payload = { fieldId, valueText: null, valueNumber: null, valueBoolean: null };
+
+        if (fieldType === "booleano") {
+          payload.valueBoolean = input.checked;
+        } else if (fieldType === "numero") {
+          payload.valueNumber = input.value === "" ? null : Number(input.value);
+        } else {
+          payload.valueText = input.value === "" ? null : input.value;
+        }
+
+        return payload;
+      })
+      .filter(item => item.fieldId > 0);
 
     return {
       group: Number(value("group") || 0),
-      category: value("category"),
+      categoryId: Number(value("category") || 0),
       title: value("title"),
       price: Number(value("price") || 0),
       currency: value("currency") || "ARS",
@@ -1372,11 +2000,11 @@
       shortDescription: value("shortDescription"),
       longDescription: value("longDescription") || null,
       imagesCsv: value("imagesCsv"),
+      videoUrl: value("videoUrl") || null,
       contactEmail: null,
       contactName: null,
       contactPhone: null,
       featured: checked("featured"),
-      videoUrl: null,
       latitude: noLocation ? null : numberOrNull(value("latitude")),
       longitude: noLocation ? null : numberOrNull(value("longitude")),
       address: noLocation ? null : value("address") || null,
@@ -1423,7 +2051,7 @@
       dimensions: null,
       warranty: null,
       shipping: null,
-      extraAttributesRaw: null,
+      dynamicFields,
       publisherMode: "Account"
     };
   }

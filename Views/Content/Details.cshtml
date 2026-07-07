@@ -1,4 +1,4 @@
-@using System.Text.Json
+﻿@using System.Text.Json
 @model PublicationDetailsContentViewModel
 
 @if (Model.Publication is null)
@@ -22,7 +22,7 @@ else
 
     <section class="detail-hero">
         <div>
-            <span class="eyebrow">@publication.Group · @publication.Category</span>
+            <span class="eyebrow">@publication.Group · @(publication.Category?.Name ?? "Sin categoría")</span>
             <h1><span class="detail-title-text">@displayTitle</span></h1>
             <p>@publication.ShortDescription</p>
         </div>
@@ -35,12 +35,39 @@ else
 
     <section class="detail-grid">
         <div class="detail-gallery">
+            @if (!string.IsNullOrWhiteSpace(publication.VideoUrl))
+            {
+                <video class="detail-gallery-primary" controls preload="metadata" playsinline src="@publication.VideoUrl"></video>
+            }
             @foreach (var image in publication.ImageList)
             {
-                <img src="@image" alt="@displayTitle" />
+                <img src="@image" alt="@displayTitle" class="detail-media-trigger" data-detail-media-type="image" data-detail-media-src="@image" data-detail-media-title="@displayTitle" />
             }
         </div>
-        <aside class="detail-panel">
+    </section>
+
+    <div class="preview-overlay detail-media-overlay" data-detail-media-overlay hidden>
+        <div class="preview-backdrop" data-detail-media-close="true"></div>
+        <div class="preview-dialog detail-media-dialog">
+            <div class="modal-content ventagram-modal detail-media-shell">
+                <div class="modal-header">
+                    <div class="preview-modal-title">
+                        <img class="preview-modal-logo" src="~/images/logo5.png" alt="Ventagram" />
+                        <h5 class="modal-title" data-detail-media-caption>@displayTitle</h5>
+                    </div>
+                    <button type="button" class="btn-close" data-detail-media-close="true" aria-label="Cerrar"></button>
+                </div>
+                <div class="detail-media-body" data-detail-media-body></div>
+            </div>
+        </div>
+    </div>
+
+    <section class="detail-stack">
+        <article class="detail-panel">
+            <h2>Descripción</h2>
+            <p>@publication.LongDescription</p>
+        </article>
+        <article class="detail-panel detail-contact-panel">
             <h2>Contacto</h2>
             <p><strong>@publication.ContactName</strong></p>
             @if (canEmail && !string.IsNullOrWhiteSpace(contactEmail))
@@ -87,13 +114,6 @@ else
             {
                 <p>Vence: @publication.ExpiresAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</p>
             }
-        </aside>
-    </section>
-
-    <section class="detail-stack">
-        <article class="detail-panel">
-            <h2>Descripción</h2>
-            <p>@publication.LongDescription</p>
         </article>
         <article class="detail-panel">
             <div class="section-heading">
@@ -111,6 +131,7 @@ else
                          new
                          {
                              id = publication.Id,
+                             videoUrl = publication.VideoUrl,
                              title = displayTitle,
                              image = publication.ImageList.FirstOrDefault(),
                              images = publication.ImageList.Take(11).ToList(),
@@ -131,37 +152,17 @@ else
         </article>
         <article class="detail-panel">
             <h2>Ficha técnica</h2>
-            <dl class="spec-list">
-                @if (publication.PropertyDetail is not null)
+            <div class="spec-list">
+                @if (publication.FieldValues.Count > 0)
                 {
-                    <div class="spec-item"><dt>Tipo</dt><dd>@publication.PropertyDetail.PropertyType</dd></div>
-                    <div class="spec-item"><dt>Operación</dt><dd>@publication.PropertyDetail.Operation</dd></div>
-                    <div class="spec-item"><dt>Zona</dt><dd>@publication.PropertyDetail.Zone</dd></div>
-                    <div class="spec-item"><dt>Superficie</dt><dd>@publication.PropertyDetail.TotalAreaM2 m²</dd></div>
-                    <div class="spec-item"><dt>Ambientes</dt><dd>@publication.PropertyDetail.RoomsOrBedrooms</dd></div>
+                    @foreach (var fieldValue in publication.FieldValues
+                        .OrderBy(x => x.CategoryField.SortOrder)
+                        .ThenBy(x => x.CategoryField.Label))
+                    {
+                        <div class="spec-item spec-card">@fieldValue.CategoryField.Label: @FormatFieldValue(fieldValue)@RenderUnit(fieldValue.CategoryField.Unit)</div>
+                    }
                 }
-                else if (publication.VehicleDetail is not null)
-                {
-                    <div class="spec-item"><dt>Marca</dt><dd>@publication.VehicleDetail.Brand</dd></div>
-                    <div class="spec-item"><dt>Modelo</dt><dd>@publication.VehicleDetail.Model</dd></div>
-                    <div class="spec-item"><dt>Año</dt><dd>@publication.VehicleDetail.Year</dd></div>
-                    <div class="spec-item"><dt>Kilómetros</dt><dd>@publication.VehicleDetail.Kilometers</dd></div>
-                    <div class="spec-item"><dt>Combustible</dt><dd>@publication.VehicleDetail.Fuel</dd></div>
-                }
-                else if (publication.GeneralDetail is not null)
-                {
-                    <div class="spec-item"><dt>Subcategoría</dt><dd>@publication.GeneralDetail.Subcategory</dd></div>
-                    <div class="spec-item"><dt>Estado</dt><dd>@publication.GeneralDetail.ItemCondition</dd></div>
-                    <div class="spec-item"><dt>Marca</dt><dd>@publication.GeneralDetail.Brand</dd></div>
-                    <div class="spec-item"><dt>Modelo</dt><dd>@publication.GeneralDetail.Model</dd></div>
-                    <div class="spec-item"><dt>Garantía</dt><dd>@publication.GeneralDetail.Warranty</dd></div>
-                }
-
-                @foreach (var attr in publication.ExtraAttributes)
-                {
-                    <div class="spec-item"><dt>@attr.Key</dt><dd>@attr.Value</dd></div>
-                }
-            </dl>
+            </div>
         </article>
     </section>
 }
@@ -182,4 +183,25 @@ else
 
         return digits;
     }
+
+    private static string FormatFieldValue(PublicationFieldValue fieldValue)
+    {
+        if (fieldValue.ValueBoolean.HasValue)
+        {
+            return fieldValue.ValueBoolean.Value ? "Si" : "No";
+        }
+
+        if (fieldValue.ValueNumber.HasValue)
+        {
+            return fieldValue.ValueNumber.Value.ToString("0.##");
+        }
+
+        return fieldValue.ValueText ?? string.Empty;
+    }
+
+    private static string RenderUnit(string? unit)
+    {
+        return string.IsNullOrWhiteSpace(unit) ? string.Empty : $" {unit}";
+    }
 }
+

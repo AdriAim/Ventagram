@@ -7,13 +7,11 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
 {
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
     public DbSet<Publication> Publications => Set<Publication>();
-    public DbSet<PropertyDetail> PropertyDetails => Set<PropertyDetail>();
-    public DbSet<VehicleDetail> VehicleDetails => Set<VehicleDetail>();
-    public DbSet<GeneralDetail> GeneralDetails => Set<GeneralDetail>();
     public DbSet<ArgentineLocality> ArgentineLocalities => Set<ArgentineLocality>();
     public DbSet<PublicationGroupType> PublicationGroupTypes => Set<PublicationGroupType>();
     public DbSet<PublicationCategory> PublicationCategories => Set<PublicationCategory>();
-    public DbSet<PublicationExtraAttribute> PublicationExtraAttributes => Set<PublicationExtraAttribute>();
+    public DbSet<PublicationCategoryField> PublicationCategoryFields => Set<PublicationCategoryField>();
+    public DbSet<PublicationFieldValue> PublicationFieldValues => Set<PublicationFieldValue>();
     public DbSet<PublicationReportReason> PublicationReportReasons => Set<PublicationReportReason>();
     public DbSet<PublicationReport> PublicationReports => Set<PublicationReport>();
 
@@ -49,6 +47,11 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
             .HasColumnType("tinyint unsigned");
 
         modelBuilder.Entity<Publication>()
+            .HasOne(x => x.Category)
+            .WithMany()
+            .HasForeignKey(x => x.CategoryId);
+
+        modelBuilder.Entity<Publication>()
             .Property(x => x.Price)
             .HasPrecision(18, 2);
 
@@ -61,6 +64,56 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
             .HasIndex(x => new { x.Group, x.Name })
             .IsUnique();
 
+        modelBuilder.Entity<PublicationCategoryField>()
+            .Property(x => x.DataType)
+            .HasConversion<byte>()
+            .HasColumnType("tinyint unsigned");
+
+        modelBuilder.Entity<PublicationCategoryField>()
+            .Property(x => x.GroupId)
+            .HasConversion<byte?>()
+            .HasColumnType("tinyint unsigned")
+            .HasColumnName("GroupId");
+
+        modelBuilder.Entity<PublicationCategoryField>()
+            .HasOne(x => x.Category)
+            .WithMany(x => x.Fields)
+            .HasForeignKey(x => x.CategoryId);
+
+        modelBuilder.Entity<PublicationCategoryField>()
+            .HasIndex(x => new { x.GroupId, x.CategoryId, x.InternalName })
+            .IsUnique();
+
+        modelBuilder.Entity<PublicationCategoryField>()
+            .HasIndex(x => new { x.GroupId, x.CategoryId, x.IsActive, x.SortOrder });
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .Property(x => x.ValueNumber)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .HasOne(x => x.Publication)
+            .WithMany(x => x.FieldValues)
+            .HasForeignKey(x => x.PublicationId);
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .HasOne(x => x.CategoryField)
+            .WithMany(x => x.Values)
+            .HasForeignKey(x => x.CategoryFieldId);
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .HasIndex(x => new { x.PublicationId, x.CategoryFieldId })
+            .IsUnique();
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .HasIndex(x => new { x.CategoryFieldId, x.ValueText });
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .HasIndex(x => new { x.CategoryFieldId, x.ValueNumber });
+
+        modelBuilder.Entity<PublicationFieldValue>()
+            .HasIndex(x => new { x.CategoryFieldId, x.ValueBoolean });
+
         modelBuilder.Entity<PublicationReportReason>()
             .HasKey(x => x.Id);
 
@@ -71,25 +124,6 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
         modelBuilder.Entity<PublicationReportReason>()
             .HasIndex(x => x.Name)
             .IsUnique();
-
-        modelBuilder.Entity<PropertyDetail>()
-            .Property(x => x.Expenses)
-            .HasPrecision(18, 2);
-
-        modelBuilder.Entity<Publication>()
-            .HasOne(x => x.PropertyDetail)
-            .WithOne(x => x.Publication)
-            .HasForeignKey<PropertyDetail>(x => x.PublicationId);
-
-        modelBuilder.Entity<Publication>()
-            .HasOne(x => x.VehicleDetail)
-            .WithOne(x => x.Publication)
-            .HasForeignKey<VehicleDetail>(x => x.PublicationId);
-
-        modelBuilder.Entity<Publication>()
-            .HasOne(x => x.GeneralDetail)
-            .WithOne(x => x.Publication)
-            .HasForeignKey<GeneralDetail>(x => x.PublicationId);
 
         modelBuilder.Entity<PublicationReport>()
             .HasOne(x => x.Reason)

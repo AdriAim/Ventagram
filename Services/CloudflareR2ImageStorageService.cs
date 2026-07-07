@@ -2,6 +2,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
@@ -12,6 +13,15 @@ namespace Ventagram.Services;
 
 public sealed class CloudflareR2ImageStorageService
 {
+    private static readonly HashSet<string> AllowedVideoContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
+    };
+
+    private static readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
+
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<CloudflareR2ImageStorageService> _logger;
@@ -45,6 +55,46 @@ public sealed class CloudflareR2ImageStorageService
         return urls;
     }
 
+    public async Task<string> UploadPublicationVideoAsync(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        if (file.Length <= 0)
+        {
+            throw new InvalidOperationException("El video esta vacio.");
+        }
+
+        var options = GetOptions();
+        ValidateConfiguration(options);
+
+        var contentType = NormalizeVideoContentType(file);
+        if (!AllowedVideoContentTypes.Contains(contentType))
+        {
+            throw new InvalidOperationException("El video debe estar en formato MP4, WEBM o MOV.");
+        }
+
+        if (file.Length > options.MaxVideoBytes)
+        {
+            throw new InvalidOperationException($"El video supera el limite de {options.MaxVideoBytes / (1024 * 1024)} MB.");
+        }
+
+        await using var inputStream = file.OpenReadStream();
+        var extension = ResolveVideoExtension(file.FileName, contentType);
+        var key = BuildObjectKey(options, extension);
+        var request = new PutObjectRequest
+        {
+            BucketName = options.Bucket,
+            Key = key,
+            InputStream = inputStream,
+            ContentType = contentType,
+            DisablePayloadSigning = true,
+            DisableDefaultChecksumValidation = true
+        };
+        request.Headers.CacheControl = "public, max-age=31536000, immutable";
+
+        await _client.Value.PutObjectAsync(request, cancellationToken);
+
+        return BuildPublicUrl(options.PublicBaseUrl, key);
+    }
+
     private async Task<string> ProcessAndUploadAsync(IFormFile file, R2Options options, CancellationToken cancellationToken)
     {
         await using var inputStream = file.OpenReadStream();
@@ -61,15 +111,25 @@ public sealed class CloudflareR2ImageStorageService
         }
 
         ApplyWatermark(image, options);
+        var webpQuality = ResolveWebpQuality(file.Length, options);
 
         await using var output = new MemoryStream();
         await image.SaveAsWebpAsync(output, new WebpEncoder
         {
-            Quality = options.WebpQuality
+            Quality = webpQuality
         }, cancellationToken);
 
+        _logger.LogInformation(
+            "Compressed publication image {FileName} from {OriginalBytes} bytes to {CompressedBytes} bytes using q={Quality} and {Width}x{Height}.",
+            file.FileName,
+            file.Length,
+            output.Length,
+            webpQuality,
+            image.Width,
+            image.Height);
+
         output.Position = 0;
-        var key = BuildObjectKey(options);
+        var key = BuildObjectKey(options, ".webp");
         var request = new PutObjectRequest
         {
             BucketName = options.Bucket,
@@ -154,7 +214,8 @@ public sealed class CloudflareR2ImageStorageService
             MaxImageSide = section.GetValue("MaxImageSide", 1600),
             WebpQuality = section.GetValue("WebpQuality", 82),
             WatermarkScale = section.GetValue("WatermarkScale", 0.14f),
-            WatermarkOpacity = section.GetValue("WatermarkOpacity", 0.45f)
+            WatermarkOpacity = section.GetValue("WatermarkOpacity", 0.45f),
+            MaxVideoBytes = section.GetValue("MaxVideoBytes", 80 * 1024 * 1024)
         };
     }
 
@@ -173,15 +234,73 @@ public sealed class CloudflareR2ImageStorageService
         }
     }
 
-    private static string BuildObjectKey(R2Options options)
+    private static string BuildObjectKey(R2Options options, string extension)
     {
-        var ext = ".webp";
-        return $"{options.Prefix.Trim('/')}/{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid():N}{ext}";
+        return $"{options.Prefix.Trim('/')}/{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid():N}{extension}";
     }
 
     private static string BuildPublicUrl(string publicBaseUrl, string key)
     {
         return $"{publicBaseUrl.TrimEnd('/')}/{key.TrimStart('/')}";
+    }
+
+    private static int ResolveWebpQuality(long originalBytes, R2Options options)
+    {
+        if (originalBytes <= 0)
+        {
+            return options.WebpQuality;
+        }
+
+        if (originalBytes <= 400_000)
+        {
+            return Math.Clamp(options.WebpQuality + 6, 70, 92);
+        }
+
+        if (originalBytes <= 1_200_000)
+        {
+            return Math.Clamp(options.WebpQuality + 2, 65, 90);
+        }
+
+        if (originalBytes <= 3_000_000)
+        {
+            return Math.Clamp(options.WebpQuality, 62, 88);
+        }
+
+        if (originalBytes <= 7_000_000)
+        {
+            return Math.Clamp(options.WebpQuality - 6, 58, 84);
+        }
+
+        return Math.Clamp(options.WebpQuality - 12, 52, 80);
+    }
+
+    private static string NormalizeVideoContentType(IFormFile file)
+    {
+        var contentType = file.ContentType?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(contentType))
+        {
+            return contentType;
+        }
+
+        return ContentTypeProvider.TryGetContentType(file.FileName, out var inferred)
+            ? inferred
+            : "application/octet-stream";
+    }
+
+    private static string ResolveVideoExtension(string? fileName, string contentType)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty);
+        if (!string.IsNullOrWhiteSpace(extension))
+        {
+            return extension.ToLowerInvariant();
+        }
+
+        return contentType.ToLowerInvariant() switch
+        {
+            "video/webm" => ".webm",
+            "video/quicktime" => ".mov",
+            _ => ".mp4"
+        };
     }
 
     private sealed class R2Options
@@ -198,5 +317,6 @@ public sealed class CloudflareR2ImageStorageService
         public int WebpQuality { get; set; } = 82;
         public float WatermarkScale { get; set; } = 0.14f;
         public float WatermarkOpacity { get; set; } = 0.45f;
+        public int MaxVideoBytes { get; set; } = 80 * 1024 * 1024;
     }
 }

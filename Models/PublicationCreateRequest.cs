@@ -1,9 +1,12 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Ventagram.Models;
 
 public class PublicationCreateRequest
 {
     public PublicationGroup Group { get; set; } = PublicationGroup.Inmuebles;
-    public string Category { get; set; } = string.Empty;
+    [Range(1, int.MaxValue, ErrorMessage = "Selecciona una categoria.")]
+    public int CategoryId { get; set; }
     public string Title { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string Currency { get; set; } = "USD";
@@ -64,5 +67,5 @@ public class PublicationCreateRequest
     public string? Dimensions { get; set; }
     public string? Warranty { get; set; }
     public string? Shipping { get; set; }
-    public string? ExtraAttributesRaw { get; set; }
+    public List<PublicationDynamicFieldInput> DynamicFields { get; set; } = [];
 }

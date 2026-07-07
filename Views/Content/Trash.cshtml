@@ -1,17 +1,17 @@
-@model TrashContentViewModel
+﻿@model TrashContentViewModel
 
 <section class="form-shell">
     <div class="section-heading">
         <span class="eyebrow">Papelera</span>
         <h1>Anuncios enviados por la comunidad</h1>
-        <p>Acá aparecen las publicaciones denunciadas. Si un aviso fue marcado por no corresponder, fraude o falta de precio, se ve acá con su historial básico.</p>
+        <p>AcÃ¡ aparecen las publicaciones denunciadas. Si un aviso fue marcado por no corresponder, fraude o falta de precio, se ve acÃ¡ con su historial bÃ¡sico.</p>
     </div>
 
     @if (!Model.Publications.Any())
     {
         <section class="empty-state">
-            <h2>La papelera está vacía.</h2>
-            <p>Todavía no hay publicaciones denunciadas por la comunidad.</p>
+            <h2>La papelera estÃ¡ vacÃ­a.</h2>
+            <p>TodavÃ­a no hay publicaciones denunciadas por la comunidad.</p>
         </section>
     }
     else
@@ -21,11 +21,11 @@
             {
                 <article class="classified-row">
                     <div>
-                        <span class="card-meta">@item.Group · @item.Category · @item.Locality</span>
+                        <span class="card-meta">@item.Group Â· @(item.Category?.Name ?? "Sin categoria") Â· @item.Locality</span>
                         <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
                         <p>@item.ShortDescription</p>
                         <div class="trash-tags">
-                            @foreach (var reason in item.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason?.Name ?? $"Razón #{r.ReasonId}"))
+                            @foreach (var reason in item.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason?.Name ?? $"RazÃ³n #{r.ReasonId}"))
                             {
                                 <span class="trash-tag">@reason</span>
                             }
@@ -49,3 +49,4 @@
         </section>
     }
 </section>
+

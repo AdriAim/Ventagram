@@ -325,6 +325,32 @@ h3,
   color: var(--muted);
 }
 
+.form-grid label.dynamic-field-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.form-grid label.dynamic-field-inline > span:first-child {
+  flex: 0 0 220px;
+}
+
+.form-grid label.dynamic-field-inline > input,
+.form-grid label.dynamic-field-inline > select,
+.form-grid label.dynamic-field-inline > .field-input-with-unit {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.form-grid label.dynamic-field-inline > .field-error {
+  flex-basis: 100%;
+}
+
+.form-grid label.dynamic-field-inline.checkline {
+  justify-content: flex-start;
+}
+
 .search-grid label span,
 .form-grid label span,
 .stack-form > label span,
@@ -491,8 +517,11 @@ textarea:focus {
 }
 
 .card-image-wrap img,
+.card-image-wrap video,
 .map-card img,
-.detail-gallery img {
+.map-card video,
+.detail-gallery img,
+.detail-gallery video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -512,6 +541,31 @@ textarea:focus {
   letter-spacing: -0.01em;
   box-shadow: 0 6px 16px rgba(31, 26, 23, 0.08);
   z-index: 2;
+}
+
+.gallery-video-badge {
+  position: absolute;
+  left: 0.8rem;
+  top: 3.1rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.34rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(20, 18, 17, 0.78);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 22px rgba(31, 26, 23, 0.18);
+}
+
+.gallery-video-badge::before {
+  content: "▶";
+  font-size: 0.62rem;
+  line-height: 1;
 }
 
 .card-body {
@@ -685,13 +739,27 @@ textarea:focus {
 }
 
 .create-map-panel {
-  display: grid;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .create-uploads-panel {
   display: grid;
   gap: 1rem;
+}
+
+.create-section-toggle {
+  margin: 0;
+}
+
+.create-map-panel .section-heading,
+.create-technical-panel .section-heading {
+  margin-bottom: 0.6rem;
+}
+
+.create-map-panel .create-section-toggle {
+  margin-top: -0.35rem;
 }
 
 .create-map-toolbar {
@@ -770,8 +838,9 @@ textarea:focus {
   border: 2px dashed rgba(49, 70, 101, 0.22);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.7);
-  height: clamp(260px, 33vh, 420px);
-  overflow: hidden;
+  min-height: clamp(260px, 33vh, 420px);
+  height: auto;
+  overflow: visible;
 }
 
 .upload-dropzone.is-dragover {
@@ -788,13 +857,17 @@ textarea:focus {
 
 .upload-previews {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 180px));
   gap: 0.8rem;
   flex: 1 1 auto;
   align-content: start;
   min-height: 0;
-  overflow: auto;
-  padding-right: 0.25rem;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.create-uploads-panel .upload-previews {
+  min-height: 180px;
 }
 
 .upload-preview {
@@ -802,19 +875,33 @@ textarea:focus {
   overflow: hidden;
   border-radius: 24px;
   background: #e8edf4;
-  aspect-ratio: 1 / 1.08;
+  aspect-ratio: 1 / 1;
   min-height: 120px;
 }
 
 .upload-preview.main {
-  grid-column: span 2;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
 }
 
 .upload-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.upload-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.upload-preview-video {
+  aspect-ratio: 1 / 1;
+}
+
+.upload-preview-video.main {
+  aspect-ratio: 1 / 1;
 }
 
 .upload-preview-empty {
@@ -885,6 +972,12 @@ textarea:focus {
   border-radius: 20px;
 }
 
+.map-card video {
+  aspect-ratio: 1 / 1;
+  border-radius: 20px;
+  background: #0d1118;
+}
+
 .map-popup-card {
   width: min(210px, 70vw);
 }
@@ -912,6 +1005,20 @@ textarea:focus {
   color: #4c413a;
   line-height: 1;
   box-shadow: 0 8px 22px rgba(31, 26, 23, 0.12);
+}
+
+.spec-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.spec-card {
+  border: 1px solid rgba(67, 52, 43, 0.14);
+  border-radius: 999px;
+  padding: 0.8rem 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .maplibregl-popup-tip {
@@ -1039,6 +1146,30 @@ textarea:focus {
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.field-input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.field-input-with-unit > input,
+.field-input-with-unit > select {
+  flex: 1 1 auto;
+}
+
+.field-unit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+  font-size: 0.92rem;
 }
 
 .field-error {
@@ -1274,13 +1405,68 @@ textarea:focus {
 
 .detail-gallery {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
 }
 
 .detail-gallery img {
-  border-radius: 24px;
-  aspect-ratio: 1 / 1;
+  border-radius: 22px;
+  aspect-ratio: 3 / 4;
+}
+
+.detail-gallery video {
+  border-radius: 22px;
+  aspect-ratio: 3 / 4;
+  background: #0d1118;
+}
+
+.detail-media-trigger {
+  cursor: zoom-in;
+}
+
+.detail-gallery-primary {
+  grid-column: auto;
+}
+
+.detail-media-dialog {
+  width: min(1280px, calc(100vw - 2rem));
+}
+
+.detail-media-shell {
+  background: #080b11;
+  color: rgba(255, 250, 245, 0.96);
+}
+
+.detail-media-shell .modal-header {
+  background: #080b11;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.detail-media-shell .btn-close {
+  filter: invert(1);
+}
+
+.detail-media-body {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  min-height: min(78vh, 920px);
+  background: #080b11;
+}
+
+.detail-media-body img,
+.detail-media-body video {
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 10rem);
+  height: auto;
+  border-radius: 20px;
+  object-fit: contain;
+  background: #080b11;
+}
+
+.detail-contact-panel {
+  grid-column: 1 / -1;
 }
 
 .spec-list {
@@ -1624,6 +1810,10 @@ textarea.input-validation-error,
 
   .gallery-header {
     align-items: flex-start;
+  }
+
+  .upload-previews {
+    grid-template-columns: 1fr;
   }
 
   .upload-preview.main {

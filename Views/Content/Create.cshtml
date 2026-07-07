@@ -8,7 +8,7 @@
     <div class="section-heading">
         <span class="eyebrow">Publicacion nueva</span>
         <h1>Crear publicacion</h1>
-        <p>Elegi la ubicacion, subi las imagenes y completa los datos minimos.</p>
+        <p>Completando los datos minimos, y subiendo al menos una foto ya puedes publicar tu anuncio.</p>
     </div>
 
     @if (Model.RequiresLogin)
@@ -35,12 +35,12 @@
             <input type="hidden" name="locality" value="@Model.Input.Locality" />
             <input type="hidden" name="address" value="@Model.Input.Address" />
             <input type="hidden" name="imagesCsv" value="@Model.Input.ImagesCsv" />
+            <input type="hidden" name="videoUrl" value="@Model.Input.VideoUrl" />
 
             <section class="detail-panel create-uploads-panel">
                 <div class="section-heading">
-                    <span class="eyebrow">Datos minimos</span>
-                    <h2>Completa lo esencial</h2>
-                    <p>El titulo se arma automaticamente a partir de la categoria y la ubicacion seleccionada.</p>
+                    <span class="eyebrow">Paso 1 - Datos minimos</span>
+                    <p>Luego podrás completar opcional ubicación en mapa y ficha técnica para que tu anuncio se posiciones en busquedas de los compradores.</p>
                 </div>
 
                 <div class="form-grid">
@@ -67,17 +67,17 @@
                         <select name="category"
                                 data-category-select
                                 data-category-endpoint="/api/content/categories"
-                                data-selected-category="@Model.Input.Category">
+                                data-selected-category-id="@Model.Input.CategoryId">
                             <option value="">Selecciona una categoria</option>
                             @foreach (var category in Model.Categories)
                             {
-                                if (string.Equals(category.Name, Model.Input.Category, StringComparison.OrdinalIgnoreCase))
+                                if (category.Id == Model.Input.CategoryId)
                                 {
-                                    <option value="@category.Name" selected>@category.Name</option>
+                                    <option value="@category.Id" selected>@category.Name</option>
                                 }
                                 else
                                 {
-                                    <option value="@category.Name">@category.Name</option>
+                                    <option value="@category.Id">@category.Name</option>
                                 }
                             }
                         </select>
@@ -126,41 +126,16 @@
                         <span class="field-error" data-field-error="longDescription"></span>
                     </label>
                 </div>
-            </section>
 
-            <section class="detail-panel create-map-panel">
-                <div class="section-heading">
-                    <span class="eyebrow">Ubicacion</span>
-                    <h2>Marca el punto en el mapa</h2>
-                    <p>Busca una direccion o hace clic sobre el mapa para fijar la ubicacion de la publicacion.</p>
+                <div class="form-grid" data-dynamic-required-fields-container data-category-fields-endpoint-template="/api/categorias/__CATEGORY_ID__/campos">
+                    <div class="wide field-hint" data-dynamic-required-fields-empty hidden></div>
                 </div>
-
-                <label class="checkline compact-check">
-                    <input name="noLocation" type="checkbox" data-create-no-location />
-                    <span>No quiero ubicar en el mapa. (Esto excluira el anuncio de las busquedas por mapa)</span>
-                </label>
-
-                <div class="create-map-toolbar">
-                    <label class="wide" data-field-container="locationSearch">
-                        <span>Buscar direccion</span>
-                        <input name="locationSearch" type="text" value="@Model.SuggestedLocalityLabel" placeholder="Calle, numero, barrio o ciudad" />
-                        <span class="field-error" data-field-error="locationSearch"></span>
-                    </label>
-                    <button type="button" class="primary-pill large" data-create-address-search>Buscar</button>
-                </div>
-
-                <div class="create-map-canvas" data-create-map data-maptiler-key="@Model.MapTilerKey"></div>
-                <p class="create-map-summary" data-create-location-summary>
-                    @(string.IsNullOrWhiteSpace(Model.SuggestedLocalityLabel)
-                        ? "Elegi una ubicacion en el mapa o buscala por direccion."
-                        : $"Ubicacion sugerida segun tu cuenta: {Model.SuggestedLocalityLabel}.")
-                </p>
             </section>
 
             <section class="detail-panel create-uploads-panel">
                 <div class="section-heading">
-                    <span class="eyebrow">Imagenes</span>
-                    <h2>Subi una principal y hasta 10 mas</h2>
+                    <span class="eyebrow">Paso 2-Imagenes</span>
+                    <h2>Subi una principal (obligaria) y hasta 10 mas (opcionales)</h2>
                     <p>Arrastra y suelta archivos o usa el selector. La primera se toma como principal y podes reorganizarla despues.</p>
                 </div>
 
@@ -174,6 +149,81 @@
                     <div class="upload-previews" data-image-previews></div>
                     <p class="field-hint">Podes cargar una imagen principal y hasta 10 adicionales. Se guardan en formato web para la publicacion.</p>
                     <span class="field-error" data-field-error="imagesCsv"></span>
+                </div>
+            </section>
+
+            <section class="detail-panel create-uploads-panel">
+                <div class="section-heading">
+                    <span class="eyebrow">Paso 3-Video opcional</span>
+                    <h2>Subi un video de hasta 1 minuto</h2>
+                    <p>Si cargas un video, pasa a ser el contenido principal de la publicacion.</p>
+                </div>
+
+                <div class="upload-dropzone" data-video-dropzone data-field-container="videoUrl">
+                    <input type="file" accept="video/mp4,video/webm,video/quicktime" data-create-video-input hidden />
+                    <div class="upload-dropzone-actions">
+                        <button type="button" class="primary-pill" data-create-video-pick>Elegir video</button>
+                        <button type="button" class="ghost-pill" data-create-video-clear>Quitar video</button>
+                        <span class="field-hint" data-video-status>Sin video</span>
+                    </div>
+                    <div class="upload-previews" data-video-previews></div>
+                    <p class="field-hint">Formatos admitidos: MP4, WEBM o MOV. Duracion maxima: 60 segundos.</p>
+                    <span class="field-error" data-field-error="videoUrl"></span>
+                </div>
+            </section>
+
+            <section class="detail-panel create-map-panel">
+                <div class="section-heading" data-section-heading>
+                    <span class="eyebrow">Ubicación (OPCIONAL)</span>
+                    <h2>Marca el punto en el mapa</h2>
+                    <p>Busca una direccion o hace clic sobre el mapa para fijar la ubicacion de la publicacion.</p>
+                </div>
+
+                <div class="create-section-toggle">
+                    <label class="checkline compact-check">
+                        <input name="showLocationSection" type="checkbox" data-section-toggle="location" />
+                        <span>Quiero cargar estos datos para posicionar mejor mi anuncio en busquedas (gratuito).</span>
+                    </label>
+                </div>
+
+                <div data-section-body="location" hidden>
+                    <div class="create-map-toolbar">
+                        <label class="wide" data-field-container="locationSearch">
+                            <span>Buscar direccion</span>
+                            <input name="locationSearch" type="text" value="@Model.SuggestedLocalityLabel" placeholder="Calle, numero, barrio o ciudad" />
+                            <span class="field-error" data-field-error="locationSearch"></span>
+                        </label>
+                        <button type="button" class="primary-pill large" data-create-address-search>Buscar</button>
+                    </div>
+
+                    <div class="create-map-canvas" data-create-map data-maptiler-key="@Model.MapTilerKey"></div>
+                    <p class="create-map-summary" data-create-location-summary>
+                        @(string.IsNullOrWhiteSpace(Model.SuggestedLocalityLabel)
+                            ? "Elegi una ubicacion en el mapa o buscala por direccion."
+                            : $"Ubicacion sugerida segun tu cuenta: {Model.SuggestedLocalityLabel}.")
+                    </p>
+                </div>
+            </section>
+
+            <section class="detail-panel create-technical-panel" data-technical-panel hidden>
+                <div class="section-heading" data-section-heading>
+                    <span class="eyebrow">Ficha tecnica (OPCIONAL)</span>
+                    <h2>Completa detalles opcionales</h2>
+                    <p>Posicionarán mucho mejor tu anuncio en las busquedas y brindarán información mas precisa a los compradores.</p>
+          
+                </div>
+
+                <div class="create-section-toggle">
+                    <label class="checkline compact-check">
+                        <input name="showTechnicalSection" type="checkbox" data-section-toggle="technical" />
+                        <span>Quiero cargar estos datos para posicionar mejor mi anuncio en busquedas (gratuito).</span>
+                    </label>
+                </div>
+
+                <div data-section-body="technical" hidden>
+                    <div class="form-grid" data-dynamic-optional-fields-container data-category-fields-endpoint-template="/api/categorias/__CATEGORY_ID__/campos">
+                        <div class="wide field-hint" data-dynamic-optional-fields-empty hidden>Selecciona una categoria para cargar la ficha tecnica opcional.</div>
+                    </div>
                 </div>
             </section>
 

@@ -15,17 +15,22 @@ public class PublicationCategoryService(VentagramDbContext db)
             .ToListAsync();
     }
 
-    public Task<bool> ExistsAsync(PublicationGroup group, string? categoryName)
+    public Task<PublicationCategory?> GetActiveByIdAsync(int categoryId)
     {
-        if (string.IsNullOrWhiteSpace(categoryName))
+        return db.PublicationCategories
+            .FirstOrDefaultAsync(x => x.IsActive && x.Id == categoryId);
+    }
+
+    public Task<bool> ExistsAsync(PublicationGroup group, int categoryId)
+    {
+        if (categoryId <= 0)
         {
             return Task.FromResult(false);
         }
 
-        var normalized = categoryName.Trim();
         return db.PublicationCategories
             .AnyAsync(x => x.IsActive
                 && x.Group == group
-                && x.Name == normalized);
+                && x.Id == categoryId);
     }
 }

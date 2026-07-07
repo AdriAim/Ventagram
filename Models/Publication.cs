@@ -8,8 +8,8 @@ public class Publication
 
     public PublicationGroup Group { get; set; } = PublicationGroup.Inmuebles;
 
-    [StringLength(80)]
-    public string Category { get; set; } = string.Empty;
+    public int CategoryId { get; set; }
+    public PublicationCategory? Category { get; set; }
 
     [StringLength(180)]
     public string Title { get; set; } = string.Empty;
@@ -59,10 +59,7 @@ public class Publication
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 
-    public PropertyDetail? PropertyDetail { get; set; }
-    public VehicleDetail? VehicleDetail { get; set; }
-    public GeneralDetail? GeneralDetail { get; set; }
-    public List<PublicationExtraAttribute> ExtraAttributes { get; set; } = [];
+    public List<PublicationFieldValue> FieldValues { get; set; } = [];
     public List<PublicationReport> Reports { get; set; } = [];
 
     public IReadOnlyList<string> ImageList =>

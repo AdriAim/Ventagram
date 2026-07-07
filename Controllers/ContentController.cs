@@ -42,6 +42,7 @@ public class ContentController(
                 {
                     id = x.Id,
                     code = x.ToAdCode(),
+                    videoUrl = x.VideoUrl,
                     title = x.Title,
                     image = x.ImageList.FirstOrDefault(),
                     images = x.ImageList.Take(11).ToList(),
@@ -85,9 +86,12 @@ public class ContentController(
         var suggestedLabel = user?.ArgentineLocality is null
             ? null
             : $"{user.ArgentineLocality.Locality}, {user.ArgentineLocality.Province}, Argentina";
+        var defaultGroup = PublicationGroup.Inmuebles;
+        var categories = await publicationCategoryService.GetActiveByGroupAsync(defaultGroup);
         var input = new PublicationCreateRequest
         {
-            Group = PublicationGroup.Inmuebles,
+            Group = defaultGroup,
+            CategoryId = categories.FirstOrDefault()?.Id ?? 0,
             Currency = "ARS",
             ContactName = user?.Name ?? string.Empty,
             ContactPhone = user?.Phone ?? string.Empty,
@@ -103,7 +107,7 @@ public class ContentController(
         {
             Input = input,
             GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
-            Categories = await publicationCategoryService.GetActiveByGroupAsync(input.Group),
+            Categories = categories,
             IsAuthenticated = currentUserAccessor.IsAuthenticated,
             RequiresLogin = !currentUserAccessor.IsAuthenticated,
             CurrentUserName = user?.Name ?? User.Identity?.Name,
@@ -172,7 +176,6 @@ public class ContentController(
             return Unauthorized(new { message = "No se encontro el usuario autenticado." });
         }
 
-        request.Title = BuildPublicationTitle(request);
         request.Currency = NormalizeCurrency(request.Currency);
         if (request.NoLocation)
         {
@@ -185,6 +188,10 @@ public class ContentController(
         request.ContactPhone = user.Phone;
         request.ContactEmail = user.Email;
         request.PublisherMode = "Account";
+        request.VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim();
+
+        var category = await publicationCategoryService.GetActiveByIdAsync(request.CategoryId);
+        request.Title = BuildPublicationTitle(category?.Name, request.Locality);
 
         var errors = await ValidateCreateRequestAsync(request);
         if (errors.Count > 0)
@@ -248,6 +255,40 @@ public class ContentController(
         }
     }
 
+    [HttpPost("upload-video")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> UploadVideo([FromForm] IFormFile? file)
+    {
+        if (!currentUserAccessor.IsAuthenticated)
+        {
+            return Unauthorized(new { message = "Tenes que iniciar sesion para subir videos." });
+        }
+
+        if (file is null || file.Length <= 0)
+        {
+            return BadRequest(new { message = "Subi un video valido." });
+        }
+
+        var fileInfo = new { file.FileName, file.Length, file.ContentType };
+        logger.LogInformation("UploadVideo received file for user {UserId}: {@File}.", currentUserAccessor.UserId, fileInfo);
+
+        try
+        {
+            var url = await imageStorageService.UploadPublicationVideoAsync(file);
+            return Ok(new { url });
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogWarning(ex, "UploadVideo validation failure for user {UserId}. File info: {@File}.", currentUserAccessor.UserId, fileInfo);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "UploadVideo unexpected failure for user {UserId}. File info: {@File}.", currentUserAccessor.UserId, fileInfo);
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
     private async Task<ApplicationUser?> LoadCurrentUserAsync()
     {
         if (!currentUserAccessor.IsAuthenticated || currentUserAccessor.UserId is not int userId)
@@ -270,13 +311,14 @@ public class ContentController(
         }
 
         if (!await publicationGroupTypeService.ExistsAsync(request.Group)) AddError("group", "Selecciona el tipo de publicacion.");
-        if (string.IsNullOrWhiteSpace(request.Category))
-        {
-            AddError("category", "Selecciona una categoria.");
-        }
-        else if (!await publicationCategoryService.ExistsAsync(request.Group, request.Category))
+        if (!await publicationCategoryService.ExistsAsync(request.Group, request.CategoryId))
         {
             AddError("category", "La categoria no corresponde al tipo elegido.");
+        }
+
+        foreach (var dynamicError in await publicationService.ValidateDynamicFieldsAsync(request))
+        {
+            errors.Add(dynamicError);
         }
 
         if (request.Price <= 0) AddError("price", "Ingresa un precio mayor a cero.");
@@ -290,6 +332,12 @@ public class ContentController(
         if (string.IsNullOrWhiteSpace(request.ShortDescription)) AddError("shortDescription", "Completa la descripcion corta.");
         if (string.IsNullOrWhiteSpace(request.LongDescription)) AddError("longDescription", "Completa la descripcion completa.");
         if (string.IsNullOrWhiteSpace(request.ImagesCsv)) AddError("imagesCsv", "Subi al menos una imagen.");
+        if (!string.IsNullOrWhiteSpace(request.VideoUrl)
+            && !Uri.IsWellFormedUriString(request.VideoUrl, UriKind.Absolute)
+            && !request.VideoUrl.StartsWith("/", StringComparison.Ordinal))
+        {
+            AddError("videoUrl", "El video principal no tiene una URL valida.");
+        }
 
         return errors;
     }
@@ -342,6 +390,7 @@ public class ContentController(
         return raw switch
         {
             "Group" => "group",
+            "CategoryId" => "category",
             "Category" => "category",
             "Price" => "price",
             "Currency" => "currency",
@@ -351,6 +400,7 @@ public class ContentController(
             "ShortDescription" => "shortDescription",
             "LongDescription" => "longDescription",
             "ImagesCsv" => "imagesCsv",
+            "VideoUrl" => "videoUrl",
             _ when raw.Length == 1 => raw.ToLowerInvariant(),
             _ => char.ToLowerInvariant(raw[0]) + raw[1..]
         };
@@ -361,14 +411,14 @@ public class ContentController(
         return string.Equals(currency, "ARS", StringComparison.OrdinalIgnoreCase) ? "ARS" : "USD";
     }
 
-    private static string BuildPublicationTitle(CreatePublicationApiRequest request)
+    private static string BuildPublicationTitle(string? categoryName, string? locality)
     {
-        var category = request.Category?.Trim();
-        var locality = request.Locality?.Trim();
+        var category = categoryName?.Trim();
+        var city = locality?.Trim();
 
-        if (!string.IsNullOrWhiteSpace(category) && !string.IsNullOrWhiteSpace(locality))
+        if (!string.IsNullOrWhiteSpace(category) && !string.IsNullOrWhiteSpace(city))
         {
-            return $"{category} en {locality}";
+            return $"{category} en {city}";
         }
 
         return category ?? "Nueva publicacion";

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ventagram.Data;
 
@@ -11,9 +12,11 @@ using Ventagram.Data;
 namespace Ventagram.Migrations
 {
     [DbContext(typeof(VentagramDbContext))]
-    partial class VentagramDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260705223741_atributos_dinamicos_categoria")]
+    partial class atributos_dinamicos_categoria
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -121,6 +124,138 @@ namespace Ventagram.Migrations
                         .IsUnique();
 
                     b.ToTable("ArgentineLocalities");
+                });
+
+            modelBuilder.Entity("Ventagram.Models.GeneralDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AcceptsTrade")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Brand")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Dimensions")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ItemCondition")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Measure")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("PublicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Shipping")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Sku")
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("Stock")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subcategory")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Warranty")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Weight")
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicationId")
+                        .IsUnique();
+
+                    b.ToTable("GeneralDetails");
+                });
+
+            modelBuilder.Entity("Ventagram.Models.PropertyDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("AgeYears")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Amenities")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Bathrooms")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Condition")
+                        .HasColumnType("longtext");
+
+                    b.Property<decimal?>("CoveredAreaM2")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<decimal?>("Expenses")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("GarageSpaces")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("MortgageEligible")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<bool>("ProfessionalUseAllowed")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("PropertyType")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("PublicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoomsOrBedrooms")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Services")
+                        .HasColumnType("longtext");
+
+                    b.Property<decimal>("TotalAreaM2")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<string>("Zone")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicationId")
+                        .IsUnique();
+
+                    b.ToTable("PropertyDetails");
                 });
 
             modelBuilder.Entity("Ventagram.Models.Publication", b =>
@@ -268,15 +403,11 @@ namespace Ventagram.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CategoryId")
+                    b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
                     b.Property<byte>("DataType")
                         .HasColumnType("tinyint unsigned");
-
-                    b.Property<byte?>("GroupId")
-                        .HasColumnType("tinyint unsigned")
-                        .HasColumnName("GroupId");
 
                     b.Property<string>("InternalName")
                         .IsRequired()
@@ -301,20 +432,40 @@ namespace Ventagram.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
-                    b.Property<string>("Unit")
-                        .HasMaxLength(24)
-                        .HasColumnType("varchar(24)");
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId", "InternalName")
+                        .IsUnique();
+
+                    b.HasIndex("CategoryId", "IsActive", "SortOrder");
+
+                    b.ToTable("PublicationCategoryFields");
+                });
+
+            modelBuilder.Entity("Ventagram.Models.PublicationExtraAttribute", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("PublicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
+                    b.HasIndex("PublicationId");
 
-                    b.HasIndex("GroupId", "CategoryId", "InternalName")
-                        .IsUnique();
-
-                    b.HasIndex("GroupId", "CategoryId", "IsActive", "SortOrder");
-
-                    b.ToTable("PublicationCategoryFields");
+                    b.ToTable("PublicationExtraAttributes");
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationFieldValue", b =>
@@ -435,6 +586,84 @@ namespace Ventagram.Migrations
                     b.ToTable("PublicationReportReasons");
                 });
 
+            modelBuilder.Entity("Ventagram.Models.VehicleDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AcceptsTrade")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("Doors")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Engine")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Equipment")
+                        .HasColumnType("longtext");
+
+                    b.Property<bool>("FinancingAvailable")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Fuel")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("GeneralCondition")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Kilometers")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LicensePlate")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("OwnersCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PublicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Traction")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Transmission")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("VehicleType")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Version")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicationId")
+                        .IsUnique();
+
+                    b.ToTable("VehicleDetails");
+                });
+
             modelBuilder.Entity("Ventagram.Models.ApplicationUser", b =>
                 {
                     b.HasOne("Ventagram.Models.ArgentineLocality", "ArgentineLocality")
@@ -442,6 +671,28 @@ namespace Ventagram.Migrations
                         .HasForeignKey("ArgentineLocalityId");
 
                     b.Navigation("ArgentineLocality");
+                });
+
+            modelBuilder.Entity("Ventagram.Models.GeneralDetail", b =>
+                {
+                    b.HasOne("Ventagram.Models.Publication", "Publication")
+                        .WithOne("GeneralDetail")
+                        .HasForeignKey("Ventagram.Models.GeneralDetail", "PublicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Publication");
+                });
+
+            modelBuilder.Entity("Ventagram.Models.PropertyDetail", b =>
+                {
+                    b.HasOne("Ventagram.Models.Publication", "Publication")
+                        .WithOne("PropertyDetail")
+                        .HasForeignKey("Ventagram.Models.PropertyDetail", "PublicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Publication");
                 });
 
             modelBuilder.Entity("Ventagram.Models.Publication", b =>
@@ -465,9 +716,22 @@ namespace Ventagram.Migrations
                 {
                     b.HasOne("Ventagram.Models.PublicationCategory", "Category")
                         .WithMany("Fields")
-                        .HasForeignKey("CategoryId");
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("Ventagram.Models.PublicationExtraAttribute", b =>
+                {
+                    b.HasOne("Ventagram.Models.Publication", "Publication")
+                        .WithMany("ExtraAttributes")
+                        .HasForeignKey("PublicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Publication");
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationFieldValue", b =>
@@ -508,11 +772,30 @@ namespace Ventagram.Migrations
                     b.Navigation("Reason");
                 });
 
+            modelBuilder.Entity("Ventagram.Models.VehicleDetail", b =>
+                {
+                    b.HasOne("Ventagram.Models.Publication", "Publication")
+                        .WithOne("VehicleDetail")
+                        .HasForeignKey("Ventagram.Models.VehicleDetail", "PublicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Publication");
+                });
+
             modelBuilder.Entity("Ventagram.Models.Publication", b =>
                 {
+                    b.Navigation("ExtraAttributes");
+
                     b.Navigation("FieldValues");
 
+                    b.Navigation("GeneralDetail");
+
+                    b.Navigation("PropertyDetail");
+
                     b.Navigation("Reports");
+
+                    b.Navigation("VehicleDetail");
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationCategory", b =>

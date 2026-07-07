@@ -7,4 +7,5 @@ public class PublicationCategory
     public string Name { get; set; } = string.Empty;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public List<PublicationCategoryField> Fields { get; set; } = [];
 }
