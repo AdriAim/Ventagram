@@ -169,7 +169,8 @@ else
                         @if (hasVideo)
                         {
                             <video src="@item.VideoUrl" class="gallery-carousel-video" preload="metadata" muted playsinline></video>
-                            <span class="gallery-video-badge" aria-hidden="true">Video</span>
+                            <button type="button" class="gallery-play-toggle" data-gallery-play-toggle="true" aria-label="Reproducir video"></button>
+                            <button type="button" class="gallery-audio-toggle" data-gallery-audio-toggle="true" aria-label="Activar audio">Activar audio</button>
                         }
                         else
                         {

@@ -568,6 +568,58 @@ textarea:focus {
   line-height: 1;
 }
 
+.gallery-play-toggle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  width: 4rem;
+  height: 4rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(94, 100, 110, 0.42);
+  box-shadow: 0 8px 22px rgba(31, 26, 23, 0.18);
+  backdrop-filter: blur(4px);
+}
+
+.gallery-play-toggle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-38%, -50%);
+  width: 0;
+  height: 0;
+  border-top: 0.8rem solid transparent;
+  border-bottom: 0.8rem solid transparent;
+  border-left: 1.3rem solid rgba(255, 255, 255, 0.92);
+}
+
+.gallery-play-toggle[hidden] {
+  display: none;
+}
+
+.gallery-audio-toggle {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  z-index: 3;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 245, 0.94);
+  color: #1f1a17;
+  padding: 0.24rem 0.5rem;
+  font-size: 0.62rem;
+  line-height: 1.1;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(31, 26, 23, 0.16);
+}
+
+.gallery-audio-toggle[hidden] {
+  display: none;
+}
+
 .card-body {
   padding: 0.85rem 0.85rem 1rem;
 }
