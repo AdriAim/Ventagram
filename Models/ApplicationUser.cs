@@ -35,4 +35,6 @@ public class ApplicationUser
     public ArgentineLocality? ArgentineLocality { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public List<FavoriteList> FavoriteLists { get; set; } = [];
 }

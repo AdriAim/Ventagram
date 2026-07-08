@@ -14,6 +14,8 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
     public DbSet<PublicationFieldValue> PublicationFieldValues => Set<PublicationFieldValue>();
     public DbSet<PublicationReportReason> PublicationReportReasons => Set<PublicationReportReason>();
     public DbSet<PublicationReport> PublicationReports => Set<PublicationReport>();
+    public DbSet<FavoriteList> FavoriteLists => Set<FavoriteList>();
+    public DbSet<FavoriteListItem> FavoriteListItems => Set<FavoriteListItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -130,5 +132,28 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
             .WithMany(x => x.Reports)
             .HasForeignKey(x => x.ReasonId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<FavoriteList>()
+            .HasOne(x => x.User)
+            .WithMany(x => x.FavoriteLists)
+            .HasForeignKey(x => x.UserId);
+
+        modelBuilder.Entity<FavoriteList>()
+            .HasIndex(x => new { x.UserId, x.Name })
+            .IsUnique();
+
+        modelBuilder.Entity<FavoriteListItem>()
+            .HasOne(x => x.FavoriteList)
+            .WithMany(x => x.Items)
+            .HasForeignKey(x => x.FavoriteListId);
+
+        modelBuilder.Entity<FavoriteListItem>()
+            .HasOne(x => x.Publication)
+            .WithMany(x => x.FavoriteListItems)
+            .HasForeignKey(x => x.PublicationId);
+
+        modelBuilder.Entity<FavoriteListItem>()
+            .HasIndex(x => new { x.FavoriteListId, x.PublicationId })
+            .IsUnique();
     }
 }

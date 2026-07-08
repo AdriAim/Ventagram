@@ -61,6 +61,7 @@ public class Publication
 
     public List<PublicationFieldValue> FieldValues { get; set; } = [];
     public List<PublicationReport> Reports { get; set; } = [];
+    public List<FavoriteListItem> FavoriteListItems { get; set; } = [];
 
     public IReadOnlyList<string> ImageList =>
         ImagesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

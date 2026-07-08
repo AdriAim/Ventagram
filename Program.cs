@@ -102,6 +102,7 @@ builder.Services.AddScoped<PublicationGroupTypeService>();
 builder.Services.AddScoped<PublicationCategoryService>();
 builder.Services.AddScoped<PublicationCategoryFieldService>();
 builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<FavoriteService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
 
 var app = builder.Build();
@@ -122,6 +123,8 @@ using (var scope = app.Services.CreateScope())
     await EnsurePublicationVideoUrlColumnAsync(db);
     await EnsurePublicationCategoryIdColumnAsync(db);
     await EnsurePublicationReportReasonsTableAsync(db);
+    await EnsureFavoriteListsTableAsync(db);
+    await EnsureFavoriteListItemsTableAsync(db);
     await SeedData.InitializeAsync(db);
     await EnsurePublicationCategoryIdColumnAsync(db);
     await EnsurePublicationReportReasonIdColumnAsync(db);
@@ -714,6 +717,76 @@ static async Task EnsurePublicationReportReasonIdColumnAsync(VentagramDbContext 
             MODIFY COLUMN ReasonId INT NOT NULL
             """;
         await alter.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureFavoriteListsTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS FavoriteLists (
+                Id INT NOT NULL AUTO_INCREMENT,
+                UserId INT NOT NULL,
+                Name VARCHAR(120) NOT NULL,
+                CreatedAtUtc DATETIME(6) NOT NULL,
+                UpdatedAtUtc DATETIME(6) NOT NULL,
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_FavoriteLists_User_Name (UserId, Name),
+                KEY IX_FavoriteLists_User_Updated (UserId, UpdatedAtUtc)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureFavoriteListItemsTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS FavoriteListItems (
+                Id INT NOT NULL AUTO_INCREMENT,
+                FavoriteListId INT NOT NULL,
+                PublicationId INT NOT NULL,
+                CreatedAtUtc DATETIME(6) NOT NULL,
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_FavoriteListItems_List_Publication (FavoriteListId, PublicationId),
+                KEY IX_FavoriteListItems_Publication (PublicationId),
+                KEY IX_FavoriteListItems_List_Created (FavoriteListId, CreatedAtUtc)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
     }
     finally
     {

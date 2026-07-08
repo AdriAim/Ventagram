@@ -1,6 +1,9 @@
-(() => {
+﻿(() => {
   let ventagramFlashMessage = "";
   let maptilerSdkPromise = null;
+  let openPublicationPreview = null;
+  const favoriteLastListStorageKey = "ventagram:last-favorite-list-id";
+  const likedPublicationsStorageKey = "ventagram:liked-publications";
   const maptilerKeyHealth = new Map();
 
   document.addEventListener("DOMContentLoaded", async () => {
@@ -8,6 +11,8 @@
     wireReportModal();
     wirePublicationPreviewModal();
     wireDetailMediaOverlay();
+    wireFavoriteModal();
+    wireFavoriteListModal();
     await loadApiPage();
   });
 
@@ -35,8 +40,11 @@
     } catch (error) {
       console.error(error);
     }
+    await wireInfiniteGalleryFeeds(host);
     wireGalleryCards();
+    wireGalleryActionMenus();
     wireDynamicGalleryCards();
+    wireFavoriteActions(host);
     wireReportForm();
     wireCreateForm();
   }
@@ -82,7 +90,7 @@
 
       if (idInput) idInput.value = publicationId || "0";
       if (titleNode) {
-        const titlePrefix = publicationCode ? `${publicationCode} · ` : "";
+        const titlePrefix = publicationCode ? `${publicationCode} Â· ` : "";
         titleNode.textContent = title ? `${titlePrefix}Denunciar: ${title}` : "Selecciona un motivo";
       }
       if (defaultReason) defaultReason.checked = true;
@@ -203,6 +211,362 @@
     });
   }
 
+  function wireFavoriteActions(root = document) {
+    root.querySelectorAll("[data-favorite-toggle='true']").forEach(button => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", async event => {
+        event.preventDefault();
+        event.stopPropagation();
+        await openFavoriteModal(button);
+      });
+    });
+
+    root.querySelectorAll("[data-favorite-list-open='true']").forEach(button => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", async event => {
+        event.preventDefault();
+        await openFavoriteListModal(button.getAttribute("data-list-id"), button.getAttribute("data-list-name"));
+      });
+    });
+
+    root.querySelectorAll("[data-like-toggle='true']").forEach(button => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const publicationId = button.getAttribute("data-publication-id");
+        togglePublicationLike(publicationId);
+      });
+    });
+  }
+
+  function wireGalleryActionMenus(root = document) {
+    root.querySelectorAll("[data-gallery-menu-toggle='true']").forEach(button => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const menu = button.closest(".card-image-wrap")?.querySelector("[data-gallery-menu]");
+        if (!menu) return;
+        const willOpen = menu.hidden;
+
+        closeAllGalleryActionMenus();
+        menu.hidden = !willOpen;
+        button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      });
+    });
+
+    root.querySelectorAll("[data-gallery-menu] button").forEach(button => {
+      if (button.dataset.menuBound === "true") return;
+      button.dataset.menuBound = "true";
+      button.addEventListener("click", () => {
+        closeAllGalleryActionMenus();
+      });
+    });
+  }
+
+  function closeAllGalleryActionMenus() {
+    document.querySelectorAll("[data-gallery-menu]").forEach(menu => {
+      menu.hidden = true;
+    });
+    document.querySelectorAll("[data-gallery-menu-toggle='true']").forEach(button => {
+      button.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function wireFavoriteModal() {
+    const modal = document.getElementById("favoriteModal");
+    const form = document.getElementById("favoriteForm");
+    if (!modal || !form) return;
+    if (modal.dataset.bound === "true") return;
+    modal.dataset.bound = "true";
+
+    const close = () => {
+      modal.hidden = true;
+      modal.classList.remove("is-open");
+      document.body.classList.remove("preview-open");
+    };
+    const syncNewListFieldVisibility = () => {
+      const select = form.querySelector("[data-favorite-list-select]");
+      const newListField = form.querySelector("[data-favorite-new-list-field]");
+      const newListInput = form.querySelector('input[name="newListName"]');
+      if (!select || !newListField || !newListInput) return;
+
+      const creatingNew = !select.value;
+      newListField.hidden = !creatingNew;
+      newListInput.disabled = !creatingNew;
+    };
+
+    modal.addEventListener("click", event => {
+      const closeTrigger = event.target.closest("[data-favorite-close='true']");
+      if (!closeTrigger) return;
+      event.preventDefault();
+      close();
+    });
+
+    form.querySelector("[data-favorite-list-select]")?.addEventListener("change", syncNewListFieldVisibility);
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const payload = {
+        publicationId: Number(form.querySelector('input[name="publicationId"]')?.value || 0),
+        listId: numberOrNull(form.querySelector('[name="listId"]')?.value || ""),
+        newListName: String(form.querySelector('input[name="newListName"]')?.value || "").trim() || null,
+        suggestedListName: String(form.querySelector('input[name="suggestedListName"]')?.value || "").trim() || null
+      };
+
+      const response = await fetch("/api/content/favorites", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "fetch"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        ventagramFlashMessage = result?.message || "No se pudo guardar en favoritos.";
+        close();
+        await loadApiPage();
+        return;
+      }
+
+      if (result?.listId) {
+        rememberLastFavoriteList(result.listId);
+      }
+      markPublicationFavorite(payload.publicationId);
+      await refreshFavoriteSummaries();
+      ventagramFlashMessage = result?.message || "Guardado en favoritos.";
+      close();
+      await loadApiPage();
+    });
+
+    syncNewListFieldVisibility();
+  }
+
+  async function openFavoriteModal(trigger) {
+    const modal = document.getElementById("favoriteModal");
+    const form = document.getElementById("favoriteForm");
+    if (!modal || !form || !trigger) return;
+
+    const publicationId = trigger.getAttribute("data-publication-id") || "0";
+    const publicationTitle = stripOpportunitySuffix(trigger.getAttribute("data-publication-title") || "Publicacion");
+    const suggestedListName = trigger.getAttribute("data-suggested-list-name") || "Inmuebles";
+    const select = form.querySelector("[data-favorite-list-select]");
+    const newListInput = form.querySelector('input[name="newListName"]');
+    form.querySelector('input[name="publicationId"]').value = publicationId;
+    form.querySelector('input[name="suggestedListName"]').value = suggestedListName;
+    if (newListInput) {
+      newListInput.value = suggestedListName;
+      newListInput.placeholder = suggestedListName;
+    }
+
+    const response = await fetch("/api/content/favorite-lists", {
+      headers: { "X-Requested-With": "fetch" }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      ventagramFlashMessage = result?.message || "Tenes que iniciar sesion para usar favoritos.";
+      await loadApiPage();
+      return;
+    }
+
+    const lists = Array.isArray(result?.lists) ? result.lists : [];
+    if (select) {
+      select.innerHTML = `<option value="">Crear una nueva</option>${lists.map(list => `<option value="${escapeAttribute(list.id)}">${escapeHtml(list.name)} (${escapeHtml(String(list.itemCount || 0))})</option>`).join("")}`;
+      const defaultListId = resolveDefaultFavoriteListId(lists, suggestedListName);
+      select.value = defaultListId ? String(defaultListId) : "";
+    }
+    const newListField = form.querySelector("[data-favorite-new-list-field]");
+    if (newListField && newListInput) {
+      const creatingNew = !select?.value;
+      newListField.hidden = !creatingNew;
+      newListInput.disabled = !creatingNew;
+    }
+
+    const titleNode = document.getElementById("favoriteModalTitle");
+    if (titleNode) {
+      titleNode.textContent = publicationTitle ? `Guardar: ${publicationTitle}` : "Guardar en favoritos";
+    }
+
+    modal.hidden = false;
+    modal.classList.add("is-open");
+    document.body.classList.add("preview-open");
+  }
+
+  function wireFavoriteListModal() {
+    const modal = document.getElementById("favoriteListModal");
+    if (!modal) return;
+    if (modal.dataset.bound === "true") return;
+    modal.dataset.bound = "true";
+
+    const close = () => {
+      modal.hidden = true;
+      modal.classList.remove("is-open");
+      document.body.classList.remove("preview-open");
+    };
+
+    modal.addEventListener("click", event => {
+      const closeTrigger = event.target.closest("[data-favorite-list-close='true']");
+      if (!closeTrigger) return;
+      event.preventDefault();
+      close();
+    });
+  }
+
+  async function openFavoriteListModal(listId, fallbackName = "Mi lista") {
+    const modal = document.getElementById("favoriteListModal");
+    const body = document.getElementById("favoriteListModalBody");
+    const title = document.getElementById("favoriteListModalTitle");
+    if (!modal || !body || !title || !listId) return;
+    rememberLastFavoriteList(listId);
+
+    title.textContent = `Cargando ${fallbackName}`;
+    body.innerHTML = `<div class="preview-modal-loading">Cargando favoritos...</div>`;
+    modal.hidden = false;
+    modal.classList.add("is-open");
+    document.body.classList.add("preview-open");
+
+    const response = await fetch(`/api/content/favorite-lists/${encodeURIComponent(listId)}`, {
+      headers: { "X-Requested-With": "fetch" }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      title.textContent = fallbackName;
+      body.innerHTML = `<section class="empty-state"><h2>No se pudo abrir la lista</h2><p>${escapeHtml(result?.message || "Intenta nuevamente.")}</p></section>`;
+      return;
+    }
+
+    const items = Array.isArray(result?.items) ? result.items : [];
+    title.textContent = result?.list?.name || fallbackName;
+    body.innerHTML = items.length
+      ? `<section class="favorites-modal-grid">${items.map(item => buildGalleryCard(item, false)).join("")}</section>`
+      : `<section class="empty-state"><h2>La lista esta vacia</h2><p>Guarda publicaciones con la estrella para verlas aca.</p></section>`;
+    wireGalleryCards();
+    wireFavoriteActions(body);
+  }
+
+  async function refreshFavoriteSummaries() {
+    const summary = document.querySelector("[data-favorites-summary]");
+    const actions = document.querySelector("[data-favorites-summary-actions]");
+    if (!summary || !actions) return;
+
+    const response = await fetch("/api/content/favorite-lists", {
+      headers: { "X-Requested-With": "fetch" }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return;
+
+    const lists = Array.isArray(result?.lists) ? result.lists : [];
+    actions.innerHTML = lists.length
+      ? lists.map(list => `<button type="button" class="view-pill" data-favorite-list-open="true" data-list-id="${escapeAttribute(list.id)}" data-list-name="${escapeAttribute(list.name)}">${escapeHtml(list.name)} (${escapeHtml(String(list.itemCount || 0))})</button>`).join("")
+      : `<span class="field-hint">Todavia no guardaste publicaciones en tus listas.</span>`;
+    wireFavoriteActions(summary);
+  }
+
+  function markPublicationFavorite(publicationId) {
+    document.querySelectorAll(`[data-favorite-toggle='true'][data-publication-id='${publicationId}']`).forEach(button => {
+      button.classList.add("is-active");
+      button.innerHTML = renderFavoriteIcon(true);
+    });
+  }
+
+  function togglePublicationLike(publicationId) {
+    if (!publicationId) return;
+    const liked = readLikedPublicationIds();
+    const key = String(publicationId);
+    if (liked.has(key)) {
+      liked.delete(key);
+    } else {
+      liked.add(key);
+    }
+
+    writeLikedPublicationIds(liked);
+    syncLikeButtonsForPublication(key);
+  }
+
+  function syncLikeButtonsForPublication(publicationId) {
+    const liked = readLikedPublicationIds().has(String(publicationId));
+    document.querySelectorAll(`[data-like-toggle='true'][data-publication-id='${publicationId}']`).forEach(button => {
+      button.classList.toggle("is-active", liked);
+      button.innerHTML = renderLikeIcon(liked);
+      button.setAttribute("aria-label", liked ? "Quitar me gusta" : "Marcar como me gusta");
+      button.setAttribute("title", liked ? "Quitar me gusta" : "Marcar como me gusta");
+    });
+  }
+
+  function renderFavoriteIcon(isActive) {
+    return `<i class="fa-${isActive ? "solid" : "regular"} fa-star" aria-hidden="true"></i>`;
+  }
+
+  function renderLikeIcon(isActive) {
+    return `<i class="fa-${isActive ? "solid" : "regular"} fa-heart" aria-hidden="true"></i>`;
+  }
+
+  function renderPreviewIcon() {
+    return `<i class="fa-regular fa-eye" aria-hidden="true"></i>`;
+  }
+
+  function readLikedPublicationIds() {
+    try {
+      const raw = localStorage.getItem(likedPublicationsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function writeLikedPublicationIds(ids) {
+    try {
+      localStorage.setItem(likedPublicationsStorageKey, JSON.stringify([...ids]));
+    } catch {
+      // Ignore storage failures and keep in-memory behavior only.
+    }
+  }
+
+  function resolveDefaultFavoriteListId(lists, suggestedListName) {
+    const normalizedSuggestedName = normalizeFavoriteListName(suggestedListName);
+    const exactGroupMatch = lists.find(list => normalizeFavoriteListName(list?.name) === normalizedSuggestedName);
+    if (exactGroupMatch?.id) {
+      return exactGroupMatch.id;
+    }
+
+    const lastListId = readLastFavoriteList();
+    if (!lastListId) {
+      return null;
+    }
+
+    const lastSelected = lists.find(list => String(list?.id) === String(lastListId));
+    return lastSelected?.id || null;
+  }
+
+  function normalizeFavoriteListName(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function rememberLastFavoriteList(listId) {
+    try {
+      localStorage.setItem(favoriteLastListStorageKey, String(listId));
+    } catch {
+      // Ignore storage failures and keep default behavior.
+    }
+  }
+
+  function readLastFavoriteList() {
+    try {
+      return localStorage.getItem(favoriteLastListStorageKey);
+    } catch {
+      return null;
+    }
+  }
+
   async function initContentMaps() {
     const homeMap = document.getElementById("map");
     const publicationMap = document.querySelector("[data-publication-map]");
@@ -266,6 +630,9 @@
     const apiKey = mapElement.dataset.maptilerKey;
     if (!apiKey) return;
     const mapMode = mapElement.dataset.mapMode || "home";
+    const initialLat = Number.parseFloat(mapElement.dataset.mapInitialLat || "");
+    const initialLng = Number.parseFloat(mapElement.dataset.mapInitialLng || "");
+    const hasInitialCenter = Number.isFinite(initialLat) && Number.isFinite(initialLng);
 
     const markers = JSON.parse(mapElement.dataset.markers || "[]");
     if (!markers.length) return;
@@ -288,22 +655,103 @@
       container: mapElement,
       style: sdk.MapStyle.STREETS,
       language: "es",
-      center: [markers[0].lng, markers[0].lat],
-      zoom: mapMode === "detail" ? 17.5 : 5
+      center: hasInitialCenter ? [initialLng, initialLat] : [markers[0].lng, markers[0].lat],
+      zoom: mapMode === "detail" ? 17.5 : (hasInitialCenter ? 11 : 5)
     });
+    const selectionPanel = mapElement.parentElement?.querySelector("[data-map-selection-card]");
+    const hoverPopup = new sdk.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 18,
+      className: "map-hover-popup"
+    });
+    const mobileTapPopup = new sdk.Popup({
+      closeButton: false,
+      closeOnClick: true,
+      offset: 20,
+      className: "map-tap-popup"
+    });
+    const setSelectedMarker = marker => {
+      if (!selectionPanel || !marker) return;
+      selectionPanel.innerHTML = buildGalleryCard({
+        id: marker.id,
+        title: marker.title,
+        galleryTitle: String(marker.title || "").split(" - oportunidad")[0],
+        publicationCode: marker.code,
+        price: marker.price,
+        detailsUrl: marker.detailsUrl,
+        videoUrl: marker.videoUrl,
+        images: Array.isArray(marker.images) && marker.images.length
+          ? marker.images
+          : [marker.image || "/images/logo4.png"]
+      }, false);
+      wireGalleryCards();
+      syncMobileGalleryVideoAutoplay(selectionPanel);
+    };
+    const handleMarkerSelection = marker => {
+      if (isMobileMapInteractionContext()) {
+        hoverPopup.remove();
+        mobileTapPopup
+          .setLngLat([marker.lng, marker.lat])
+          .setHTML(buildMapMarkerTapCard(marker))
+          .addTo(instance);
+        return;
+      }
+
+      setSelectedMarker(marker);
+    };
 
     const bounds = new sdk.LngLatBounds();
     markers.forEach(marker => {
-      const popup = new sdk.Popup({ offset: 24 }).setHTML(buildMapGalleryPopup(marker));
-      new sdk.Marker({ color: "#ff5a5f" })
+      const markerInstance = new sdk.Marker({ color: "#ff5a5f" })
         .setLngLat([marker.lng, marker.lat])
-        .setPopup(popup)
         .addTo(instance);
+      const markerElement = markerInstance.getElement();
+      let lastTouchSelectionAt = 0;
+      markerElement.addEventListener("click", event => {
+        if (Date.now() - lastTouchSelectionAt < 500) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        handleMarkerSelection(marker);
+      });
+      markerElement.addEventListener("touchend", event => {
+        lastTouchSelectionAt = Date.now();
+        event.preventDefault();
+        event.stopPropagation();
+        handleMarkerSelection(marker);
+      }, { passive: false });
+      markerElement.addEventListener("pointerup", event => {
+        if (event.pointerType !== "touch") return;
+        lastTouchSelectionAt = Date.now();
+        event.preventDefault();
+        event.stopPropagation();
+        handleMarkerSelection(marker);
+      });
+      markerElement.addEventListener("mouseenter", () => {
+        hoverPopup
+          .setLngLat([marker.lng, marker.lat])
+          .setHTML(buildMapMarkerHoverCard(marker))
+          .addTo(instance);
+      });
+      markerElement.addEventListener("mouseleave", () => {
+        hoverPopup.remove();
+      });
 
       bounds.extend([marker.lng, marker.lat]);
     });
 
-    if (markers.length > 1) {
+    if (!isMobileMapInteractionContext()) {
+      setSelectedMarker(markers[0]);
+    }
+
+    if (mapMode === "home" && hasInitialCenter) {
+      instance.flyTo({ center: [initialLng, initialLat], zoom: 11 });
+    } else if (markers.length > 1) {
       instance.fitBounds(bounds, { padding: 60 });
     } else if (mapMode === "detail") {
       instance.flyTo({ center: [markers[0].lng, markers[0].lat], zoom: 17.5 });
@@ -461,7 +909,7 @@
         if (addressInput) addressInput.value = "";
         if (searchInput) searchInput.value = "";
         if (summary) {
-          summary.textContent = "Sin ubicación disponible";
+          summary.textContent = "Sin ubicaciÃ³n disponible";
         }
         syncCreateTitle(form);
         return;
@@ -482,7 +930,7 @@
       }
 
       if (summary) {
-        summary.textContent = "Elegí una ubicación en el mapa o buscala por dirección.";
+        summary.textContent = "ElegÃ­ una ubicaciÃ³n en el mapa o buscala por direcciÃ³n.";
       }
     };
 
@@ -500,7 +948,7 @@
         flyTo: false
       });
     } else if (summary) {
-      summary.textContent = "Elegí una ubicación en el mapa o buscala por dirección.";
+      summary.textContent = "ElegÃ­ una ubicaciÃ³n en el mapa o buscala por direcciÃ³n.";
     }
 
     marker.on("dragend", async () => {
@@ -523,7 +971,7 @@
       const results = await geocodeCreateLocation(apiKey, query);
       const feature = results?.[0];
       if (!feature) {
-        if (summary) summary.textContent = "No encontramos esa dirección. Probá con otra búsqueda.";
+        if (summary) summary.textContent = "No encontramos esa direcciÃ³n. ProbÃ¡ con otra bÃºsqueda.";
         return;
       }
 
@@ -680,10 +1128,10 @@
       pieces.push(location.address);
     }
     if (!pieces.length) {
-      pieces.push(`Lat ${Number(location.lat).toFixed(5)} · Lng ${Number(location.lng).toFixed(5)}`);
+      pieces.push(`Lat ${Number(location.lat).toFixed(5)} Â· Lng ${Number(location.lng).toFixed(5)}`);
     }
 
-    return `Ubicación seleccionada: ${pieces.join(" · ")}`;
+    return `UbicaciÃ³n seleccionada: ${pieces.join(" Â· ")}`;
   }
 
   function syncCreateTitle(form) {
@@ -697,7 +1145,7 @@
       return;
     }
 
-    titleInput.value = category || "Nueva publicación";
+    titleInput.value = category || "Nueva publicaciÃ³n";
   }
 
   function buildMapGalleryPopup(marker) {
@@ -733,6 +1181,34 @@
           <span class="gallery-title-overlay">${galleryTitle}</span>
         </a>
       </article>
+    `;
+  }
+
+  function buildMapMarkerHoverCard(marker) {
+    const title = escapeHtml(stripOpportunitySuffix(marker?.title || ""));
+    const price = escapeHtml(marker?.price || "");
+
+    return `
+      <div class="map-hover-card">
+        <strong>${title || "Publicacion"}</strong>
+        <span>${price || "Precio sin informar"}</span>
+      </div>
+    `;
+  }
+
+  function buildMapMarkerTapCard(marker) {
+    const title = escapeHtml(stripOpportunitySuffix(marker?.title || ""));
+    const price = escapeHtml(marker?.price || "");
+    const detailsUrl = escapeAttribute(`/api/content/details/${marker?.id || ""}`);
+
+    return `
+      <div class="map-tap-card">
+        <strong>${title || "Publicacion"}</strong>
+        <span>${price || "Precio sin informar"}</span>
+        <button type="button" class="primary-pill compact" data-map-open-preview="true" data-details-url="${detailsUrl}">
+          Mostrar anuncio
+        </button>
+      </div>
     `;
   }
 
@@ -845,7 +1321,7 @@
       modalElement.hidden = true;
       modalElement.classList.remove("is-open");
       document.body.classList.remove("preview-open");
-      title.textContent = "Detalle de publicación";
+      title.textContent = "Detalle de publicaciÃ³n";
       body.innerHTML = "";
     };
 
@@ -863,21 +1339,11 @@
       }
     });
 
-    document.addEventListener("click", async event => {
-      const trigger = event.target.closest(".publication-preview-trigger");
-      if (!trigger) return;
-      if (event.target.closest(".gallery-nav") || event.target.closest(".report-trigger") || event.target.closest("[data-gallery-play-toggle='true']") || event.target.closest("[data-gallery-audio-toggle='true']")) {
-        event.preventDefault();
-        return;
-      }
-
-      event.preventDefault();
-
-      const detailsUrl = trigger.getAttribute("data-details-url") || trigger.getAttribute("href");
+    openPublicationPreview = async detailsUrl => {
       if (!detailsUrl) return;
 
-      title.textContent = "Cargando publicación";
-      body.innerHTML = `<div class="preview-modal-loading">Cargando detalle…</div>`;
+      title.textContent = "Cargando publicaciÃƒÂ³n";
+      body.innerHTML = `<div class="preview-modal-loading">Cargando detalleÃ¢â‚¬Â¦</div>`;
 
       let response;
       try {
@@ -886,7 +1352,7 @@
         });
       } catch {
         title.textContent = "No se pudo cargar";
-        body.innerHTML = `<section class="empty-state"><h2>Error al abrir la publicación</h2><p>Revisá la conexión e intentá nuevamente.</p></section>`;
+        body.innerHTML = `<section class="empty-state"><h2>Error al abrir la publicaciÃƒÂ³n</h2><p>RevisÃƒÂ¡ la conexiÃƒÂ³n e intentÃƒÂ¡ nuevamente.</p></section>`;
         modalElement.hidden = false;
         modalElement.classList.add("is-open");
         document.body.classList.add("preview-open");
@@ -895,7 +1361,7 @@
 
       if (!response.ok) {
         title.textContent = "No se pudo cargar";
-        body.innerHTML = `<section class="empty-state"><h2>Error al abrir la publicación</h2><p>Intentá nuevamente en unos segundos.</p></section>`;
+        body.innerHTML = `<section class="empty-state"><h2>Error al abrir la publicaciÃƒÂ³n</h2><p>IntentÃƒÂ¡ nuevamente en unos segundos.</p></section>`;
         modalElement.hidden = false;
         modalElement.classList.add("is-open");
         document.body.classList.add("preview-open");
@@ -904,7 +1370,65 @@
 
       body.innerHTML = await response.text();
       const publicationTitle = body.querySelector(".detail-hero h1")?.textContent?.trim();
-      title.textContent = stripOpportunitySuffix(publicationTitle) || "Detalle de publicación";
+      title.textContent = stripOpportunitySuffix(publicationTitle) || "Detalle de publicaciÃƒÂ³n";
+      modalElement.hidden = false;
+      modalElement.classList.add("is-open");
+      document.body.classList.add("preview-open");
+      await initContentMaps();
+    };
+
+    document.addEventListener("click", async event => {
+      const mapPreviewTrigger = event.target.closest("[data-map-open-preview='true']");
+      if (mapPreviewTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        const detailsUrl = mapPreviewTrigger.getAttribute("data-details-url");
+        await openPublicationPreview(detailsUrl);
+        return;
+      }
+
+      const trigger = event.target.closest(".publication-preview-trigger");
+      if (!trigger) return;
+      if (event.target.closest(".gallery-nav") || event.target.closest(".report-trigger") || event.target.closest("[data-gallery-play-toggle='true']") || event.target.closest("[data-gallery-audio-toggle='true']") || event.target.closest("[data-favorite-toggle='true']") || event.target.closest("[data-like-toggle='true']") || event.target.closest("[data-gallery-menu-toggle='true']") || event.target.closest("[data-gallery-menu]")) {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+
+      const detailsUrl = trigger.getAttribute("data-details-url") || trigger.getAttribute("href");
+      await openPublicationPreview(detailsUrl);
+      return;
+
+      title.textContent = "Cargando publicaciÃ³n";
+      body.innerHTML = `<div class="preview-modal-loading">Cargando detalleâ€¦</div>`;
+
+      let response;
+      try {
+        response = await fetch(detailsUrl, {
+          headers: { "X-Requested-With": "fetch" }
+        });
+      } catch {
+        title.textContent = "No se pudo cargar";
+        body.innerHTML = `<section class="empty-state"><h2>Error al abrir la publicaciÃ³n</h2><p>RevisÃ¡ la conexiÃ³n e intentÃ¡ nuevamente.</p></section>`;
+        modalElement.hidden = false;
+        modalElement.classList.add("is-open");
+        document.body.classList.add("preview-open");
+        return;
+      }
+
+      if (!response.ok) {
+        title.textContent = "No se pudo cargar";
+        body.innerHTML = `<section class="empty-state"><h2>Error al abrir la publicaciÃ³n</h2><p>IntentÃ¡ nuevamente en unos segundos.</p></section>`;
+        modalElement.hidden = false;
+        modalElement.classList.add("is-open");
+        document.body.classList.add("preview-open");
+        return;
+      }
+
+      body.innerHTML = await response.text();
+      const publicationTitle = body.querySelector(".detail-hero h1")?.textContent?.trim();
+      title.textContent = stripOpportunitySuffix(publicationTitle) || "Detalle de publicaciÃ³n";
       modalElement.hidden = false;
       modalElement.classList.add("is-open");
       document.body.classList.add("preview-open");
@@ -1231,13 +1755,13 @@
     });
 
     if (!response.ok) {
-      categorySelect.innerHTML = `<option value="">No se pudieron cargar las categorías</option>`;
+      categorySelect.innerHTML = `<option value="">No se pudieron cargar las categorÃ­as</option>`;
       return;
     }
 
     const items = await response.json();
     const options = Array.isArray(items) ? items : [];
-    categorySelect.innerHTML = `<option value="">Seleccioná una categoría</option>`;
+    categorySelect.innerHTML = `<option value="">SeleccionÃ¡ una categorÃ­a</option>`;
 
     options.forEach(item => {
       const option = document.createElement("option");
@@ -1506,13 +2030,13 @@
 
     const render = () => {
       if (countNode) {
-        countNode.textContent = `${state.length}/11 imágenes`;
+        countNode.textContent = `${state.length}/11 imÃ¡genes`;
       }
 
       if (!previews) return;
 
       if (!state.length) {
-        previews.innerHTML = `<div class="upload-preview upload-preview-empty"><span>Las imágenes que subas aparecerán acá.</span></div>`;
+        previews.innerHTML = `<div class="upload-preview upload-preview-empty"><span>Las imÃ¡genes que subas aparecerÃ¡n acÃ¡.</span></div>`;
         updateHiddenValue();
         return;
       }
@@ -1521,9 +2045,9 @@
         <article class="upload-preview ${index === 0 ? "main" : ""}">
           <img src="${escapeAttribute(item.previewUrl)}" alt="${escapeAttribute(item.file.name)}" />
           <span class="gallery-badge">${index === 0 ? "Principal" : `#${index + 1}`}</span>
-          <span class="upload-status">${item.uploadedUrl ? "Listo" : "Subiendo…"}</span>
-          <button type="button" class="gallery-nav gallery-nav-prev upload-action" data-upload-action="primary" data-upload-id="${item.id}" aria-label="Marcar como principal">★</button>
-          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-upload-action="remove" data-upload-id="${item.id}" aria-label="Quitar imagen">×</button>
+          <span class="upload-status">${item.uploadedUrl ? "Listo" : "Subiendoâ€¦"}</span>
+          <button type="button" class="gallery-nav gallery-nav-prev upload-action" data-upload-action="primary" data-upload-id="${item.id}" aria-label="Marcar como principal">â˜…</button>
+          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-upload-action="remove" data-upload-id="${item.id}" aria-label="Quitar imagen">Ã—</button>
         </article>
       `).join("");
 
@@ -1563,7 +2087,7 @@
             }
           });
           render();
-          throw new Error(result.message || "No se pudieron subir las imágenes.");
+          throw new Error(result.message || "No se pudieron subir las imÃ¡genes.");
         }
 
         const urls = Array.isArray(result.urls) ? result.urls : [];
@@ -1580,7 +2104,7 @@
         await currentUpload;
       } catch (error) {
         if (feedback) {
-          feedback.innerHTML = `<div class="status-banner warning">${escapeHtml(error.message || "No se pudieron subir las imágenes.")}</div>`;
+          feedback.innerHTML = `<div class="status-banner warning">${escapeHtml(error.message || "No se pudieron subir las imÃ¡genes.")}</div>`;
         }
       }
     };
@@ -1705,7 +2229,7 @@
           <video src="${escapeAttribute(state.previewUrl)}" preload="metadata" muted playsinline controls></video>
           <span class="gallery-badge">Video principal</span>
           <span class="upload-status">${state.uploadedUrl ? "Listo" : "Subiendo..."}</span>
-          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-video-action="remove" aria-label="Quitar video">×</button>
+          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-video-action="remove" aria-label="Quitar video">Ã—</button>
         </article>
       `;
 
@@ -1848,6 +2372,178 @@
     };
   }
 
+  async function wireInfiniteGalleryFeeds(root = document) {
+    const feeds = Array.from(root.querySelectorAll("[data-gallery-feed='true']"));
+    for (const feed of feeds) {
+      if (feed.dataset.galleryFeedBound === "true") continue;
+      feed.dataset.galleryFeedBound = "true";
+      await initInfiniteGalleryFeed(feed, {
+        desktopVisibleRows: Number(feed.dataset.galleryDesktopVisibleRows || 3),
+        desktopPreloadRows: Number(feed.dataset.galleryDesktopPreloadRows || 3),
+        mobilePreloadItems: Number(feed.dataset.galleryMobilePreloadItems || 20)
+      });
+    }
+  }
+
+  async function initInfiniteGalleryFeed(feed, options) {
+    const rail = feed.querySelector(".gallery-rail");
+    const loader = feed.querySelector("[data-gallery-loader]");
+    const sentinel = feed.querySelector("[data-gallery-sentinel]");
+    const endpoint = feed.dataset.galleryEndpoint || "";
+    if (!rail || !loader || !sentinel || !endpoint) return;
+
+    const state = {
+      endpoint,
+      offset: 0,
+      hasMore: true,
+      loading: false,
+      observer: null
+    };
+
+    const syncLoader = message => {
+      loader.textContent = message;
+      loader.hidden = false;
+    };
+
+    const getConfig = () => {
+      const mobile = isMobileGalleryAutoplayContext();
+      if (mobile) {
+        const mobileBatch = Math.max(1, options.mobilePreloadItems || 20);
+        return {
+          initialLimit: mobileBatch,
+          appendLimit: mobileBatch,
+          rootMargin: "1200px 0px"
+        };
+      }
+
+      const columns = getGalleryColumnCount(rail);
+      const visibleRows = Math.max(1, options.desktopVisibleRows || 3);
+      const preloadRows = Math.max(1, options.desktopPreloadRows || 3);
+      return {
+        initialLimit: columns * (visibleRows + preloadRows),
+        appendLimit: columns * preloadRows,
+        rootMargin: "1600px 0px"
+      };
+    };
+
+    const loadMore = async () => {
+      if (state.loading || !state.hasMore) return;
+
+      state.loading = true;
+      syncLoader(state.offset === 0 ? "Cargando publicaciones..." : "Cargando mas publicaciones...");
+      const config = getConfig();
+      const limit = state.offset === 0 ? config.initialLimit : config.appendLimit;
+
+      try {
+        const url = new URL(state.endpoint, window.location.origin);
+        url.searchParams.set("offset", String(state.offset));
+        url.searchParams.set("limit", String(limit));
+
+        const response = await fetch(url.toString(), {
+          headers: { "X-Requested-With": "fetch" }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Gallery request failed with status ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        rail.insertAdjacentHTML("beforeend", items.map((item, index) => buildGalleryCard(item, state.offset + index === 0)).join(""));
+        state.offset = Number(payload?.nextOffset ?? (state.offset + items.length));
+        state.hasMore = Boolean(payload?.hasMore);
+
+        if (!items.length && state.offset === 0) {
+          syncLoader("No hay publicaciones para esta busqueda.");
+          sentinel.hidden = true;
+        } else if (!items.length && !state.hasMore) {
+          syncLoader("No hay mas publicaciones para mostrar.");
+        } else if (!state.hasMore) {
+          syncLoader("Llegaste al final de la galeria.");
+          sentinel.hidden = true;
+        } else {
+          loader.hidden = true;
+          sentinel.hidden = false;
+        }
+
+        wireGalleryCards();
+        syncMobileGalleryVideoAutoplay(document);
+      } catch (error) {
+        console.error(error);
+        syncLoader("No se pudieron cargar mas publicaciones.");
+      } finally {
+        state.loading = false;
+      }
+    };
+
+    const observeMore = () => {
+      state.observer?.disconnect?.();
+      const config = getConfig();
+      state.observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          loadMore().catch(console.error);
+        }
+      }, {
+        root: null,
+        rootMargin: config.rootMargin,
+        threshold: 0
+      });
+      state.observer.observe(sentinel);
+    };
+
+    observeMore();
+    await loadMore();
+    window.addEventListener("resize", observeMore, { passive: true });
+  }
+
+  function getGalleryColumnCount(rail) {
+    const styles = window.getComputedStyle(rail);
+    const gap = Number.parseFloat(styles.columnGap || styles.gap || "16") || 16;
+    const minCardWidth = 220;
+    const availableWidth = rail.clientWidth || rail.parentElement?.clientWidth || window.innerWidth;
+    return Math.max(1, Math.floor((availableWidth + gap) / (minCardWidth + gap)));
+  }
+
+  function buildGalleryCard(item, isFirstCard) {
+    const title = escapeHtml(item?.title || "");
+    const galleryTitle = escapeHtml(item?.galleryTitle || item?.title || "");
+    const publicationId = escapeAttribute(item?.id || "");
+    const publicationCode = escapeAttribute(item?.publicationCode || "");
+    const detailsUrl = escapeAttribute(item?.detailsUrl || "#");
+    const price = escapeHtml(item?.price || "");
+    const videoUrl = escapeAttribute(item?.videoUrl || "");
+    const images = Array.isArray(item?.images) && item.images.length
+      ? item.images
+      : ["/images/logo4.png"];
+    const escapedImages = images.map(image => escapeAttribute(image || "/images/logo4.png"));
+    const firstImage = escapedImages[0];
+    const mediaCount = escapedImages.length + (videoUrl ? 1 : 0);
+    const isFavorite = Boolean(item?.isFavorite);
+    const suggestedListName = escapeAttribute(item?.groupName || "Inmuebles");
+    const navButtons = mediaCount > 1
+      ? `
+          <button type="button" class="gallery-nav gallery-nav-prev" data-direction="-1" aria-label="Foto anterior">&#8249;</button>
+          <button type="button" class="gallery-nav gallery-nav-next" data-direction="1" aria-label="Foto siguiente">&#8250;</button>
+        `
+      : "";
+
+    return `
+      <article class="listing-card listing-card-compact"${isFirstCard ? ' id="gallery-first"' : ""}>
+        <a href="${detailsUrl}" class="card-image-wrap publication-preview-trigger" data-publication-id="${publicationId}" data-details-url="/api/content/details/${publicationId}" data-images="${escapedImages.join("|||")}" data-video-url="${videoUrl}" data-media-index="0">
+          ${videoUrl
+            ? `<video src="${videoUrl}" class="gallery-carousel-video" preload="metadata" muted playsinline></video><button type="button" class="gallery-play-toggle" data-gallery-play-toggle="true" aria-label="Reproducir video"></button><button type="button" class="gallery-audio-toggle" data-gallery-audio-toggle="true" aria-label="Activar audio">Activar audio</button>`
+            : `<img src="${firstImage}" alt="${title}" class="gallery-carousel-image" loading="lazy" decoding="async" />`}
+          <span class="gallery-badge">${price}</span>
+          ${navButtons}
+          <span class="gallery-title-overlay">${galleryTitle}</span>
+          <button type="button" class="favorite-toggle gallery-favorite-corner ${isFavorite ? "is-active" : ""}" data-favorite-toggle="true" data-publication-id="${publicationId}" data-publication-title="${title}" data-suggested-list-name="${suggestedListName}" title="Añadir a mi lista de favoritos" aria-label="Añadir a mi lista de favoritos">${renderFavoriteIcon(isFavorite)}</button>
+        </a>
+        <div class="gallery-card-actions">
+          <button type="button" class="gallery-action-button report-trigger" data-publication-id="${publicationId}" data-publication-code="${publicationCode}" data-publication-title="${title}" aria-label="Denunciar ${title}">Denunciar</button>
+        </div>
+      </article>
+    `;
+  }
   function wireGalleryCards() {
     document.querySelectorAll(".gallery-nav").forEach(button => {
       if (button.dataset.bound === "true") return;
@@ -2034,6 +2730,12 @@
 
   function isMobileGalleryAutoplayContext() {
     return window.matchMedia?.("(max-width: 768px)")?.matches
+      || window.matchMedia?.("(pointer: coarse)")?.matches
+      || navigator.maxTouchPoints > 0;
+  }
+
+  function isMobileMapInteractionContext() {
+    return window.matchMedia?.("(max-width: 780px)")?.matches
       || window.matchMedia?.("(pointer: coarse)")?.matches
       || navigator.maxTouchPoints > 0;
   }

@@ -6,20 +6,26 @@ namespace Ventagram.Services;
 
 public class PublicationService(VentagramDbContext db)
 {
-    public async Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query)
-    {
-        var items = await GetActivePublicationsAsync();
-        return items
-            .Where(x => group is null || x.Group == group.Value)
-            .Where(x => string.IsNullOrWhiteSpace(query)
-                || x.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || x.ShortDescription.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || x.Locality.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || (x.Category?.Name ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase)
-                || x.FieldValues.Any(v =>
-                    (v.ValueText ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-    }
+    public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query)
+        => BuildActiveSearchQuery(group, query).ToListAsync();
+
+    public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query, double? referenceLatitude, double? referenceLongitude)
+        => BuildOrderedActiveSearchQuery(group, query, referenceLatitude, referenceLongitude).ToListAsync();
+
+    public Task<int> CountActivePublicationsAsync(PublicationGroup? group, string? query)
+        => BuildActiveSearchQuery(group, query).CountAsync();
+
+    public Task<List<Publication>> SearchActivePublicationsPageAsync(PublicationGroup? group, string? query, int skip, int take)
+        => BuildActiveSearchQuery(group, query)
+            .Skip(Math.Max(0, skip))
+            .Take(Math.Max(1, take))
+            .ToListAsync();
+
+    public Task<List<Publication>> SearchActivePublicationsPageAsync(PublicationGroup? group, string? query, int skip, int take, double? referenceLatitude, double? referenceLongitude)
+        => BuildOrderedActiveSearchQuery(group, query, referenceLatitude, referenceLongitude)
+            .Skip(Math.Max(0, skip))
+            .Take(Math.Max(1, take))
+            .ToListAsync();
 
     public async Task<List<Publication>> GetActivePublicationsAsync()
     {
@@ -184,6 +190,60 @@ public class PublicationService(VentagramDbContext db)
         publication.Status = "Baja solicitada";
         await db.SaveChangesAsync();
         return true;
+    }
+
+    private IQueryable<Publication> BuildActiveSearchQuery(PublicationGroup? group, string? query)
+    {
+        var now = DateTime.UtcNow;
+        var items = db.Publications
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Where(x => x.IsActive && (x.ExpiresAtUtc == null || x.ExpiresAtUtc > now));
+
+        if (group is not null)
+        {
+            items = items.Where(x => x.Group == group.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var term = $"%{query.Trim()}%";
+            items = items.Where(x =>
+                EF.Functions.Like(x.Title, term) ||
+                EF.Functions.Like(x.ShortDescription, term) ||
+                EF.Functions.Like(x.Locality, term) ||
+                (x.Category != null && EF.Functions.Like(x.Category.Name, term)) ||
+                x.FieldValues.Any(v => v.ValueText != null && EF.Functions.Like(v.ValueText, term)));
+        }
+
+        return items
+            .OrderByDescending(x => x.Featured)
+            .ThenByDescending(x => x.CreatedAtUtc);
+    }
+
+    private IQueryable<Publication> BuildOrderedActiveSearchQuery(
+        PublicationGroup? group,
+        string? query,
+        double? referenceLatitude,
+        double? referenceLongitude)
+    {
+        var items = BuildActiveSearchQuery(group, query);
+        if (referenceLatitude is null || referenceLongitude is null)
+        {
+            return items;
+        }
+
+        var latitude = referenceLatitude.Value;
+        var longitude = referenceLongitude.Value;
+
+        return items
+            .OrderBy(x => x.Latitude.HasValue && x.Longitude.HasValue ? 0 : 1)
+            .ThenBy(x => x.Latitude.HasValue && x.Longitude.HasValue
+                ? ((x.Latitude ?? 0d) - latitude) * ((x.Latitude ?? 0d) - latitude)
+                    + ((x.Longitude ?? 0d) - longitude) * ((x.Longitude ?? 0d) - longitude)
+                : double.MaxValue)
+            .ThenByDescending(x => x.Featured)
+            .ThenByDescending(x => x.CreatedAtUtc);
     }
 
     private static List<PublicationFieldValue> BuildDynamicFieldValues(

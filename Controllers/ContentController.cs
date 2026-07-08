@@ -16,26 +16,84 @@ public class ContentController(
     PublicationGroupTypeService publicationGroupTypeService,
     PublicationCategoryService publicationCategoryService,
     ReportService reportService,
+    FavoriteService favoriteService,
     CloudflareR2ImageStorageService imageStorageService,
     CurrentUserAccessor currentUserAccessor,
     VentagramDbContext db,
     ILogger<ContentController> logger,
     IConfiguration configuration) : Controller
 {
+    private const int MaxMapPublications = 250;
+
     [HttpGet("home")]
-    public async Task<IActionResult> Home([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null)
+    public async Task<IActionResult> Home([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
+        var currentUser = await LoadCurrentUserAsync();
         var selectedGroup = PublicationGroupExtensions.ParseOrDefault(group);
-        var publications = await publicationService.SearchActivePublicationsAsync(selectedGroup, query);
+        var selectedMode = string.IsNullOrWhiteSpace(mode) ? "Galeria" : mode;
+        var safePageSize = NormalizeTextPageSize(pageSize);
+        var safePage = Math.Max(1, page);
+        var publications = new List<Publication>();
+        var totalResults = 0;
+        var userLocalityLabel = currentUser?.ArgentineLocality?.Locality;
+        var userLocalityLatitude = currentUser?.ArgentineLocality?.Latitude;
+        var userLocalityLongitude = currentUser?.ArgentineLocality?.Longitude;
+        var favoritePublicationIds = new HashSet<int>();
+        var favoriteLists = new List<FavoriteListSummaryViewModel>();
+
+        if (selectedMode == "Texto")
+        {
+            totalResults = await publicationService.CountActivePublicationsAsync(selectedGroup, query);
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalResults / (double)safePageSize));
+            safePage = Math.Min(safePage, totalPages);
+            publications = await publicationService.SearchActivePublicationsPageAsync(
+                selectedGroup,
+                query,
+                (safePage - 1) * safePageSize,
+                safePageSize,
+                userLocalityLatitude,
+                userLocalityLongitude);
+        }
+        else if (selectedMode == "Mapa")
+        {
+            publications = await publicationService.SearchActivePublicationsAsync(
+                selectedGroup,
+                query,
+                userLocalityLatitude,
+                userLocalityLongitude);
+            totalResults = publications.Count;
+            publications = LimitMapPublications(publications, MaxMapPublications);
+        }
+
+        if (currentUserAccessor.UserId is int currentUserId)
+        {
+            favoritePublicationIds = await favoriteService.GetFavoritePublicationIdsAsync(currentUserId, publications.Select(x => x.Id));
+            favoriteLists = await favoriteService.GetListSummariesAsync(currentUserId);
+        }
+
+        var computedTotalPages = selectedMode == "Texto"
+            ? Math.Max(1, (int)Math.Ceiling(totalResults / (double)safePageSize))
+            : (publications.Count > 0 ? 1 : 0);
         var model = new HomeContentViewModel
         {
             Group = selectedGroup.ToDisplayName(),
             GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
-            Mode = string.IsNullOrWhiteSpace(mode) ? "Galeria" : mode,
+            Mode = selectedMode,
             Query = query,
             Publications = publications,
+            Page = safePage,
+            PageSize = safePageSize,
+            TotalResults = totalResults,
+            TotalPages = computedTotalPages,
+            UserLocalityLabel = userLocalityLabel,
+            UserLocalityLatitude = userLocalityLatitude,
+            UserLocalityLongitude = userLocalityLongitude,
+            CanManageFavorites = currentUserAccessor.IsAuthenticated,
+            FavoritePublicationIds = favoritePublicationIds,
+            FavoriteLists = favoriteLists,
             MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
             FlashMessage = flash,
+            GalleryApiEndpoint = $"/api/content/gallery-items?group={Uri.EscapeDataString(selectedGroup.ToDisplayName())}&query={Uri.EscapeDataString(query ?? string.Empty)}",
             MarkersJson = JsonSerializer.Serialize(publications
                 .Where(x => x.Latitude.HasValue && x.Longitude.HasValue)
                 .Select(x => new
@@ -54,6 +112,109 @@ public class ContentController(
         };
 
         return PartialView("~/Views/Content/Home.cshtml", model);
+    }
+
+    [HttpGet("gallery-items")]
+    public async Task<IActionResult> GalleryItems([FromQuery] string? group = "Inmuebles", [FromQuery] string? query = null, [FromQuery] int offset = 0, [FromQuery] int limit = 20)
+    {
+        var currentUser = await LoadCurrentUserAsync();
+        var selectedGroup = PublicationGroupExtensions.ParseOrDefault(group);
+        var safeOffset = Math.Max(0, offset);
+        var safeLimit = Math.Clamp(limit, 1, 60);
+        var items = await publicationService.SearchActivePublicationsPageAsync(
+            selectedGroup,
+            query,
+            safeOffset,
+            safeLimit + 1,
+            currentUser?.ArgentineLocality?.Latitude,
+            currentUser?.ArgentineLocality?.Longitude);
+        var hasMore = items.Count > safeLimit;
+        var payloadItems = items.Take(safeLimit).ToList();
+        var favoritePublicationIds = currentUserAccessor.UserId is int currentUserId
+            ? await favoriteService.GetFavoritePublicationIdsAsync(currentUserId, payloadItems.Select(x => x.Id))
+            : [];
+        var payload = payloadItems
+            .Select(item => MapGalleryItem(item, favoritePublicationIds.Contains(item.Id)))
+            .ToList();
+
+        return Ok(new
+        {
+            items = payload,
+            hasMore,
+            nextOffset = safeOffset + payload.Count
+        });
+    }
+
+    [HttpGet("favorite-lists")]
+    public async Task<IActionResult> FavoriteLists()
+    {
+        if (currentUserAccessor.UserId is not int userId)
+        {
+            return Unauthorized(new { message = "Tenes que iniciar sesion para usar favoritos." });
+        }
+
+        var lists = await favoriteService.GetListSummariesAsync(userId);
+        return Ok(new { lists });
+    }
+
+    [HttpGet("favorite-lists/{listId:int}")]
+    public async Task<IActionResult> FavoriteListItems(int listId)
+    {
+        if (currentUserAccessor.UserId is not int userId)
+        {
+            return Unauthorized(new { message = "Tenes que iniciar sesion para usar favoritos." });
+        }
+
+        var result = await favoriteService.GetListContentAsync(userId, listId);
+        if (result is null)
+        {
+            return NotFound(new { message = "La lista no existe." });
+        }
+
+        var (summary, publications) = result.Value;
+        return Ok(new
+        {
+            list = summary,
+            items = publications.Select(item => MapGalleryItem(item, true)).ToList()
+        });
+    }
+
+    [HttpPost("favorites")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> AddFavorite([FromBody] AddFavoriteRequest request)
+    {
+        if (currentUserAccessor.UserId is not int userId)
+        {
+            return Unauthorized(new { message = "Tenes que iniciar sesion para guardar favoritos." });
+        }
+
+        if (request.PublicationId <= 0)
+        {
+            return BadRequest(new { message = "La publicacion indicada no es valida." });
+        }
+
+        try
+        {
+            var result = await favoriteService.AddFavoriteAsync(
+                userId,
+                request.PublicationId,
+                request.ListId,
+                request.NewListName,
+                request.SuggestedListName);
+
+            return Ok(new
+            {
+                message = result.Added
+                    ? $"Guardado en {result.List.Name}."
+                    : $"La publicacion ya estaba en {result.List.Name}.",
+                listId = result.List.Id,
+                listName = result.List.Name
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet("trash")]
@@ -422,5 +583,65 @@ public class ContentController(
         }
 
         return category ?? "Nueva publicacion";
+    }
+
+    private static int NormalizeTextPageSize(int pageSize)
+    {
+        return pageSize switch
+        {
+            100 => 100,
+            200 => 200,
+            _ => 50
+        };
+    }
+
+    /// <summary>
+    /// Limita la cantidad de publicaciones que salen en la vista de mapa.
+    ///
+    /// Qué resuelve:
+    /// - Evita entregar cientos o miles de markers de una sola vez.
+    /// - Mantiene más liviana la serialización del JSON del mapa.
+    /// - Reduce trabajo de render del navegador y evita que el mapa se vuelva tosco al moverlo.
+    ///
+    /// Criterio aplicado:
+    /// - Solo conserva publicaciones con coordenadas válidas.
+    /// - Prioriza destacadas primero.
+    /// - Dentro de ese grupo, prioriza las más recientes.
+    /// - Finalmente corta en un máximo fijo.
+    ///
+    /// La idea es que el mapa no intente mostrar "todo", sino una muestra útil y estable.
+    /// Si en el futuro se quiere una política mejor, este es el único punto a reemplazar
+    /// por lógica de bounding box, zoom, clustering o relevancia geográfica.
+    /// </summary>
+    private static List<Publication> LimitMapPublications(IEnumerable<Publication> publications, int maxItems)
+    {
+        return publications
+            .Where(x => x.Latitude.HasValue && x.Longitude.HasValue)
+            .OrderByDescending(x => x.Featured)
+            .ThenByDescending(x => x.CreatedAtUtc)
+            .Take(Math.Max(1, maxItems))
+            .ToList();
+    }
+
+    private static object MapGalleryItem(Publication item, bool isFavorite)
+    {
+        var images = item.ImageList
+            .Take(11)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        return new
+        {
+            id = item.Id,
+            title = item.Title,
+            galleryTitle = item.Title.Split(" - oportunidad", StringSplitOptions.TrimEntries)[0],
+            publicationCode = item.ToAdCode(),
+            price = $"{item.Currency} {item.Price:N0}",
+            detailsUrl = $"/Publications/Details/{item.Id}",
+            videoUrl = item.VideoUrl,
+            images,
+            groupName = item.Group.ToDisplayName(),
+            isFavorite
+        };
     }
 }
