@@ -11,6 +11,7 @@
     wireReportModal();
     wirePublicationPreviewModal();
     wireDetailMediaOverlay();
+    wireDetailGalleryLayout();
     wireFavoriteModal();
     wireFavoriteListModal();
     await loadApiPage();
@@ -586,6 +587,29 @@
     if (createMap) {
       await initCreateMap(createMap, sdk);
     }
+  }
+
+  function wireDetailGalleryLayout() {
+    const galleries = Array.from(document.querySelectorAll(".detail-gallery"));
+    if (!galleries.length) return;
+
+    const applyLayout = gallery => {
+      const styles = window.getComputedStyle(gallery);
+      const gap = Number.parseFloat(styles.columnGap || styles.gap || "16") || 16;
+      const minCardWidth = 180;
+      const availableWidth = gallery.clientWidth || gallery.parentElement?.clientWidth || window.innerWidth;
+      const columnCount = Math.max(1, Math.floor((availableWidth + gap) / (minCardWidth + gap)));
+      gallery.style.gridTemplateColumns = `repeat(${columnCount}, minmax(0, 1fr))`;
+    };
+
+    galleries.forEach(gallery => {
+      if (gallery.dataset.layoutBound === "true") return;
+      gallery.dataset.layoutBound = "true";
+      applyLayout(gallery);
+
+      const observer = new ResizeObserver(() => applyLayout(gallery));
+      observer.observe(gallery);
+    });
   }
 
   function loadMaptilerSdk() {
@@ -1369,6 +1393,7 @@
       }
 
       body.innerHTML = await response.text();
+      wireDetailGalleryLayout();
       const publicationTitle = body.querySelector(".detail-hero h1")?.textContent?.trim();
       title.textContent = stripOpportunitySuffix(publicationTitle) || "Detalle de publicaciÃƒÂ³n";
       modalElement.hidden = false;
@@ -1440,6 +1465,10 @@
     if (document.body.dataset.detailMediaOverlayBound === "true") return;
 
     document.body.dataset.detailMediaOverlayBound = "true";
+    const overlayState = {
+      items: [],
+      index: 0
+    };
 
     const closeOverlay = overlay => {
       if (!overlay) return;
@@ -1447,12 +1476,66 @@
       if (body) {
         body.innerHTML = "";
       }
+      overlayState.items = [];
+      overlayState.index = 0;
       overlay.hidden = true;
       overlay.classList.remove("is-open");
       document.body.classList.remove("preview-open");
     };
 
+    const renderOverlayItem = (overlay, index) => {
+      const body = overlay?.querySelector("[data-detail-media-body]");
+      const caption = overlay?.querySelector("[data-detail-media-caption]");
+      const prevButton = overlay?.querySelector("[data-detail-media-nav='prev']");
+      const nextButton = overlay?.querySelector("[data-detail-media-nav='next']");
+      const item = overlayState.items[index];
+      if (!overlay || !body || !item) return;
+
+      overlayState.index = index;
+      body.innerHTML = item.type === "video"
+        ? `<video src="${escapeAttribute(item.src)}" controls autoplay playsinline preload="metadata"></video>`
+        : `<img src="${escapeAttribute(item.src)}" alt="${escapeAttribute(item.title)}" />`;
+      if (caption) {
+        caption.textContent = `${item.type === "video" ? "Video" : "Imagen"} ${index + 1} de ${overlayState.items.length}`;
+      }
+      if (prevButton) {
+        prevButton.hidden = overlayState.items.length <= 1;
+      }
+      if (nextButton) {
+        nextButton.hidden = overlayState.items.length <= 1;
+      }
+    };
+
+    const syncDetailVideoPlayButton = frame => {
+      const video = frame?.querySelector("video");
+      const button = frame?.querySelector("[data-detail-video-play='true']");
+      if (!video || !button) return;
+
+      const isPlaying = !video.paused && !video.ended;
+      button.innerHTML = isPlaying
+        ? `<i class="fa-solid fa-pause" aria-hidden="true"></i>`
+        : `<i class="fa-solid fa-play" aria-hidden="true"></i>`;
+      button.setAttribute("aria-label", isPlaying ? "Pausar video" : "Reproducir video");
+      button.setAttribute("title", isPlaying ? "Pausar video" : "Reproducir video");
+    };
+
     document.addEventListener("click", event => {
+      const playTrigger = event.target.closest("[data-detail-video-play='true']");
+      if (playTrigger) {
+        const frame = playTrigger.closest("[data-detail-media-item='true']");
+        const video = frame?.querySelector("video");
+        if (!video) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (video.paused || video.ended) {
+          video.play?.().catch(() => {});
+        } else {
+          video.pause?.();
+        }
+        syncDetailVideoPlayButton(frame);
+        return;
+      }
+
       const closeTrigger = event.target.closest("[data-detail-media-close='true']");
       if (closeTrigger) {
         const overlay = closeTrigger.closest("[data-detail-media-overlay]");
@@ -1462,7 +1545,19 @@
         return;
       }
 
-      const trigger = event.target.closest(".detail-media-trigger");
+      const navTrigger = event.target.closest("[data-detail-media-nav]");
+      if (navTrigger) {
+        const overlay = navTrigger.closest("[data-detail-media-overlay]");
+        if (!overlayState.items.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const direction = navTrigger.getAttribute("data-detail-media-nav") === "next" ? 1 : -1;
+        const nextIndex = (overlayState.index + direction + overlayState.items.length) % overlayState.items.length;
+        renderOverlayItem(overlay, nextIndex);
+        return;
+      }
+
+      const trigger = event.target.closest("[data-detail-media-item='true']");
       if (!trigger) return;
       if (!trigger.closest(".detail-gallery")) return;
 
@@ -1475,27 +1570,76 @@
       const overlay = siblingOverlay
         || trigger.closest("#publicationPreviewBody")?.querySelector("[data-detail-media-overlay]")
         || document.querySelector("[data-detail-media-overlay]");
-      const body = overlay?.querySelector("[data-detail-media-body]");
-      const caption = overlay?.querySelector("[data-detail-media-caption]");
       const mediaType = trigger.getAttribute("data-detail-media-type") || "image";
       const mediaSrc = trigger.getAttribute("data-detail-media-src") || trigger.getAttribute("src") || "";
       const mediaTitle = stripOpportunitySuffix(trigger.getAttribute("data-detail-media-title") || trigger.getAttribute("alt") || "Vista ampliada");
 
-      if (!overlay || !body || !mediaSrc) return;
+      if (!overlay || !mediaSrc) return;
 
-      body.innerHTML = mediaType === "video"
-        ? `<video src="${escapeAttribute(mediaSrc)}" controls autoplay playsinline preload="metadata"></video>`
-        : `<img src="${escapeAttribute(mediaSrc)}" alt="${escapeAttribute(mediaTitle)}" />`;
-      if (caption) {
-        caption.textContent = mediaTitle || "Vista ampliada";
+      if (mediaType === "video") {
+        const frame = trigger.closest(".detail-gallery-video-frame");
+        const video = frame?.querySelector("video");
+        if (video && !video.paused) {
+          video.pause?.();
+          syncDetailVideoPlayButton(frame);
+        }
       }
+
+      const gallery = trigger.closest(".detail-gallery");
+      const items = Array.from(gallery?.querySelectorAll("[data-detail-media-item='true']") || []).map(el => ({
+        type: el.getAttribute("data-detail-media-type") || "image",
+        src: el.getAttribute("data-detail-media-src") || el.getAttribute("src") || "",
+        title: stripOpportunitySuffix(el.getAttribute("data-detail-media-title") || el.getAttribute("alt") || mediaTitle || "Vista ampliada")
+      })).filter(item => item.src);
+
+      overlayState.items = items.length ? items : [{ type: mediaType, src: mediaSrc, title: mediaTitle }];
+      overlayState.index = Math.max(0, overlayState.items.findIndex(item => item.src === mediaSrc));
+      if (overlayState.index < 0) overlayState.index = 0;
+
+      renderOverlayItem(overlay, overlayState.index);
 
       overlay.hidden = false;
       overlay.classList.add("is-open");
       document.body.classList.add("preview-open");
     });
 
+    document.addEventListener("play", event => {
+      const video = event.target.closest?.(".detail-gallery-video-frame video");
+      if (!video) return;
+      syncDetailVideoPlayButton(video.closest(".detail-gallery-video-frame"));
+    }, true);
+
+    document.addEventListener("pause", event => {
+      const video = event.target.closest?.(".detail-gallery-video-frame video");
+      if (!video) return;
+      syncDetailVideoPlayButton(video.closest(".detail-gallery-video-frame"));
+    }, true);
+
+    document.addEventListener("ended", event => {
+      const video = event.target.closest?.(".detail-gallery-video-frame video");
+      if (!video) return;
+      syncDetailVideoPlayButton(video.closest(".detail-gallery-video-frame"));
+    }, true);
+
     document.addEventListener("keydown", event => {
+      if (event.key === "ArrowLeft" && overlayState.items.length) {
+        const overlay = document.querySelector("[data-detail-media-overlay].is-open");
+        if (overlay) {
+          event.preventDefault();
+          renderOverlayItem(overlay, (overlayState.index - 1 + overlayState.items.length) % overlayState.items.length);
+        }
+        return;
+      }
+
+      if (event.key === "ArrowRight" && overlayState.items.length) {
+        const overlay = document.querySelector("[data-detail-media-overlay].is-open");
+        if (overlay) {
+          event.preventDefault();
+          renderOverlayItem(overlay, (overlayState.index + 1) % overlayState.items.length);
+        }
+        return;
+      }
+
       if (event.key !== "Escape") return;
       document.querySelectorAll("[data-detail-media-overlay].is-open").forEach(overlay => {
         closeOverlay(overlay);
@@ -2030,13 +2174,13 @@
 
     const render = () => {
       if (countNode) {
-        countNode.textContent = `${state.length}/11 imÃ¡genes`;
+        countNode.textContent = `${state.length}/11 imágenes`;
       }
 
       if (!previews) return;
 
       if (!state.length) {
-        previews.innerHTML = `<div class="upload-preview upload-preview-empty"><span>Las imÃ¡genes que subas aparecerÃ¡n acÃ¡.</span></div>`;
+        previews.innerHTML = `<div class="upload-preview upload-preview-empty"><span>Las imágenes que subas aparecerán acá.</span></div>`;
         updateHiddenValue();
         return;
       }
@@ -2534,13 +2678,11 @@
             ? `<video src="${videoUrl}" class="gallery-carousel-video" preload="metadata" muted playsinline></video><button type="button" class="gallery-play-toggle" data-gallery-play-toggle="true" aria-label="Reproducir video"></button><button type="button" class="gallery-audio-toggle" data-gallery-audio-toggle="true" aria-label="Activar audio">Activar audio</button>`
             : `<img src="${firstImage}" alt="${title}" class="gallery-carousel-image" loading="lazy" decoding="async" />`}
           <span class="gallery-badge">${price}</span>
+          <button type="button" class="gallery-action-button gallery-report-overlay report-trigger" data-publication-id="${publicationId}" data-publication-code="${publicationCode}" data-publication-title="${title}" aria-label="Denunciar ${title}">Denunciar</button>
           ${navButtons}
           <span class="gallery-title-overlay">${galleryTitle}</span>
           <button type="button" class="favorite-toggle gallery-favorite-corner ${isFavorite ? "is-active" : ""}" data-favorite-toggle="true" data-publication-id="${publicationId}" data-publication-title="${title}" data-suggested-list-name="${suggestedListName}" title="Añadir a mi lista de favoritos" aria-label="Añadir a mi lista de favoritos">${renderFavoriteIcon(isFavorite)}</button>
         </a>
-        <div class="gallery-card-actions">
-          <button type="button" class="gallery-action-button report-trigger" data-publication-id="${publicationId}" data-publication-code="${publicationCode}" data-publication-title="${title}" aria-label="Denunciar ${title}">Denunciar</button>
-        </div>
       </article>
     `;
   }

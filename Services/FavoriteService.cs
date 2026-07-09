@@ -124,6 +124,8 @@ public class FavoriteService(VentagramDbContext db)
             .OrderByDescending(x => x.CreatedAtUtc)
             .Include(x => x.Publication)
                 .ThenInclude(x => x.Category)
+            .Include(x => x.Publication)
+                .ThenInclude(x => x.MediaItems)
             .ToListAsync();
 
         return (list, favoriteItems.Select(x => x.Publication).ToList());

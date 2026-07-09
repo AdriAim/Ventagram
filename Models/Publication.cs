@@ -26,7 +26,6 @@ public class Publication
     public string ShortDescription { get; set; } = string.Empty;
 
     public string? LongDescription { get; set; }
-    public string ImagesCsv { get; set; } = string.Empty;
     public int? UserId { get; set; }
     public ApplicationUser? User { get; set; }
 
@@ -44,9 +43,6 @@ public class Publication
 
     public bool Featured { get; set; }
 
-    [StringLength(400)]
-    public string? VideoUrl { get; set; }
-
     public string? InternalNotes { get; set; }
     public bool IsAnonymous { get; set; }
     public bool IsActive { get; set; } = true;
@@ -60,9 +56,24 @@ public class Publication
     public double? Longitude { get; set; }
 
     public List<PublicationFieldValue> FieldValues { get; set; } = [];
+    public List<PublicationMedia> MediaItems { get; set; } = [];
     public List<PublicationReport> Reports { get; set; } = [];
     public List<FavoriteListItem> FavoriteListItems { get; set; } = [];
 
-    public IReadOnlyList<string> ImageList =>
-        ImagesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    public IReadOnlyList<string> ImageList
+    {
+        get => MediaItems
+            .Where(x => x.MediaType == PublicationMediaType.Image && !string.IsNullOrWhiteSpace(x.Url))
+            .OrderBy(x => x.SortOrder)
+            .Select(x => x.Url)
+            .ToList();
+    }
+
+    public string? PrimaryVideoUrl =>
+        MediaItems
+            .Where(x => x.MediaType == PublicationMediaType.Video && !string.IsNullOrWhiteSpace(x.Url))
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.SortOrder)
+            .Select(x => x.Url)
+            .FirstOrDefault();
 }

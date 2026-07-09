@@ -32,6 +32,7 @@ public class PublicationService(VentagramDbContext db)
         var now = DateTime.UtcNow;
         return await db.Publications
             .Include(x => x.Category)
+            .Include(x => x.MediaItems)
             .Include(x => x.FieldValues)
                 .ThenInclude(x => x.CategoryField)
             .Where(x => x.IsActive && (x.ExpiresAtUtc == null || x.ExpiresAtUtc > now))
@@ -45,6 +46,7 @@ public class PublicationService(VentagramDbContext db)
         return await db.Publications
             .Include(x => x.User)
             .Include(x => x.Category)
+            .Include(x => x.MediaItems)
             .Include(x => x.FieldValues)
                 .ThenInclude(x => x.CategoryField)
             .Include(x => x.Reports)
@@ -56,6 +58,7 @@ public class PublicationService(VentagramDbContext db)
     {
         return await db.Publications
             .Include(x => x.Category)
+            .Include(x => x.MediaItems)
             .Include(x => x.FieldValues)
                 .ThenInclude(x => x.CategoryField)
             .Include(x => x.Reports)
@@ -91,18 +94,21 @@ public class PublicationService(VentagramDbContext db)
             Locality = input.NoLocation ? string.Empty : input.Locality,
             ShortDescription = input.ShortDescription,
             LongDescription = input.LongDescription,
-            ImagesCsv = NormalizeImagesCsv(input.ImagesCsv),
             ContactName = input.ContactName ?? string.Empty,
             ContactPhone = input.ContactPhone ?? string.Empty,
             ContactEmail = input.ContactEmail,
             Status = "Activa",
             Featured = input.Featured,
-            VideoUrl = NormalizeOptionalUrl(input.VideoUrl),
             InternalNotes = input.InternalNotes,
             Latitude = input.Latitude,
             Longitude = input.Longitude,
             UserId = userId
         };
+
+        publication.MediaItems.AddRange(PublicationMediaBuilder.Build(
+            input.ImagesCsv,
+            input.VideoUrl,
+            publication.CreatedAtUtc));
 
         string? rawAnonymousPassword = null;
         if (input.PublisherMode == "Anonymous")
@@ -198,6 +204,7 @@ public class PublicationService(VentagramDbContext db)
         var items = db.Publications
             .AsNoTracking()
             .Include(x => x.Category)
+            .Include(x => x.MediaItems)
             .Where(x => x.IsActive && (x.ExpiresAtUtc == null || x.ExpiresAtUtc > now));
 
         if (group is not null)
@@ -404,33 +411,6 @@ public class PublicationService(VentagramDbContext db)
     private static string? NormalizeValueText(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
-
-    private static string NormalizeImagesCsv(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return string.Empty;
-        }
-
-        return string.Join(",",
-            raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(x => Uri.IsWellFormedUriString(x, UriKind.Absolute) || x.StartsWith("/", StringComparison.Ordinal))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(11));
-    }
-
-    private static string? NormalizeOptionalUrl(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        var value = raw.Trim();
-        return Uri.IsWellFormedUriString(value, UriKind.Absolute) || value.StartsWith("/", StringComparison.Ordinal)
-            ? value
-            : null;
     }
 
 }

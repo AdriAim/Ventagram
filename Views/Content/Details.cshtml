@@ -33,33 +33,42 @@ else
         </div>
     </section>
 
-    <section class="detail-grid">
+    <section class="detail-grid detail-gallery-grid">
         <div class="detail-gallery">
-            @if (!string.IsNullOrWhiteSpace(publication.VideoUrl))
+            @if (!string.IsNullOrWhiteSpace(publication.PrimaryVideoUrl))
             {
-                <video class="detail-gallery-primary" controls preload="metadata" playsinline src="@publication.VideoUrl"></video>
+                <div class="detail-gallery-video-frame detail-media-trigger"
+                     data-detail-media-item="true"
+                     data-detail-media-type="video"
+                     data-detail-media-src="@publication.PrimaryVideoUrl"
+                     data-detail-media-title="@displayTitle">
+                    <video class="detail-gallery-primary"
+                           preload="metadata"
+                           playsinline
+                           src="@publication.PrimaryVideoUrl"></video>
+                    <button type="button" class="detail-gallery-video-play" data-detail-video-play="true" aria-label="Reproducir video">
+                        <i class="fa-solid fa-play" aria-hidden="true"></i>
+                    </button>
+                </div>
             }
             @foreach (var image in publication.ImageList)
             {
-                <img src="@image" alt="@displayTitle" class="detail-media-trigger" data-detail-media-type="image" data-detail-media-src="@image" data-detail-media-title="@displayTitle" />
+                <img src="@image" alt="@displayTitle" class="detail-media-trigger" data-detail-media-item="true" data-detail-media-type="image" data-detail-media-src="@image" data-detail-media-title="@displayTitle" />
             }
         </div>
     </section>
 
     <div class="preview-overlay detail-media-overlay" data-detail-media-overlay hidden>
         <div class="preview-backdrop" data-detail-media-close="true"></div>
-        <div class="preview-dialog detail-media-dialog">
-            <div class="modal-content ventagram-modal detail-media-shell">
-                <div class="modal-header">
-                    <div class="preview-modal-title">
-                        <img class="preview-modal-logo" src="~/images/logo5.png" alt="Ventagram" />
-                        <h5 class="modal-title" data-detail-media-caption>@displayTitle</h5>
-                    </div>
-                    <button type="button" class="btn-close" data-detail-media-close="true" aria-label="Cerrar"></button>
-                </div>
-                <div class="detail-media-body" data-detail-media-body></div>
-            </div>
-        </div>
+        <button type="button" class="btn-close detail-media-close" data-detail-media-close="true" aria-label="Cerrar"></button>
+        <button type="button" class="detail-media-nav detail-media-prev" data-detail-media-nav="prev" aria-label="Imagen anterior">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+        </button>
+        <div class="detail-media-body" data-detail-media-body></div>
+        <button type="button" class="detail-media-nav detail-media-next" data-detail-media-nav="next" aria-label="Imagen siguiente">
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+        </button>
+        <div class="detail-media-caption" data-detail-media-caption hidden></div>
     </div>
 
     <section class="detail-stack">
@@ -131,7 +140,7 @@ else
                          new
                          {
                              id = publication.Id,
-                             videoUrl = publication.VideoUrl,
+                             videoUrl = publication.PrimaryVideoUrl,
                              title = displayTitle,
                              image = publication.ImageList.FirstOrDefault(),
                              images = publication.ImageList.Take(11).ToList(),
@@ -161,6 +170,12 @@ else
                     {
                         <div class="spec-item spec-card">@fieldValue.CategoryField.Label: @FormatFieldValue(fieldValue)@RenderUnit(fieldValue.CategoryField.Unit)</div>
                     }
+                }
+                else
+                {
+                    <div class="empty-state compact-empty">
+                        <h3>No hay datos técnicos disponibles</h3>
+                    </div>
                 }
             </div>
         </article>

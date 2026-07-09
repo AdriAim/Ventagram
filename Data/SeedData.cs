@@ -1020,7 +1020,6 @@ public static class SeedData
             Locality = locality,
             ShortDescription = shortDescription,
             LongDescription = longDescription,
-            ImagesCsv = BuildImagesCsv(imageUrl, PropertyGalleryPool),
             ContactName = user.Name,
             ContactPhone = user.Phone,
             ContactEmail = user.Email,
@@ -1029,6 +1028,10 @@ public static class SeedData
             Status = "Activa",
             Latitude = latitude,
             Longitude = longitude,
+            MediaItems = PublicationMediaBuilder.Build(
+                BuildImagesCsv(imageUrl, PropertyGalleryPool),
+                null,
+                DateTime.UtcNow)
         };
         return publication;
     }
@@ -1068,7 +1071,6 @@ public static class SeedData
             Locality = locality,
             ShortDescription = shortDescription,
             LongDescription = longDescription,
-            ImagesCsv = BuildImagesCsv(imageUrl, VehicleGalleryPool),
             ContactName = user.Name,
             ContactPhone = user.Phone,
             ContactEmail = user.Email,
@@ -1077,6 +1079,10 @@ public static class SeedData
             Status = "Activa",
             Latitude = latitude,
             Longitude = longitude,
+            MediaItems = PublicationMediaBuilder.Build(
+                BuildImagesCsv(imageUrl, VehicleGalleryPool),
+                null,
+                DateTime.UtcNow)
         };
         return publication;
     }
@@ -1111,7 +1117,6 @@ public static class SeedData
             Locality = locality,
             ShortDescription = shortDescription,
             LongDescription = longDescription,
-            ImagesCsv = BuildImagesCsv(imageUrl, GeneralGalleryPool),
             ContactName = user.Name,
             ContactPhone = user.Phone,
             ContactEmail = user.Email,
@@ -1120,6 +1125,10 @@ public static class SeedData
             Status = "Activa",
             Latitude = latitude,
             Longitude = longitude,
+            MediaItems = PublicationMediaBuilder.Build(
+                BuildImagesCsv(imageUrl, GeneralGalleryPool),
+                null,
+                DateTime.UtcNow)
         };
         return publication;
     }
@@ -1224,7 +1233,9 @@ public static class SeedData
 
     private static async Task BackfillGalleryImagesAsync(VentagramDbContext db, int demoUserId)
     {
-        var publications = await db.Publications.ToListAsync();
+        var publications = await db.Publications
+            .Include(x => x.MediaItems)
+            .ToListAsync();
         var changed = false;
         var seedGalleryImages = new HashSet<string>(
             PropertyGalleryPool
@@ -1234,8 +1245,11 @@ public static class SeedData
 
         foreach (var publication in publications)
         {
-            var currentImages = publication.ImagesCsv
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var currentImages = publication.MediaItems
+                .Where(x => x.MediaType == PublicationMediaType.Image && !string.IsNullOrWhiteSpace(x.Url))
+                .OrderBy(x => x.SortOrder)
+                .Select(x => x.Url)
+                .ToArray();
 
             if (publication.UserId != demoUserId)
             {
@@ -1251,14 +1265,14 @@ public static class SeedData
                     .Take(11)
                     .ToArray();
 
-                var normalizedCurrent = string.Join(",", currentImages);
-                var normalizedCleaned = string.Join(",", cleanedImages);
-                if (!string.Equals(normalizedCurrent, normalizedCleaned, StringComparison.Ordinal))
+                if (currentImages.SequenceEqual(cleanedImages, StringComparer.OrdinalIgnoreCase))
                 {
-                    publication.ImagesCsv = normalizedCleaned;
-                    changed = true;
+                    continue;
                 }
 
+                publication.MediaItems.RemoveAll(x => x.MediaType == PublicationMediaType.Image);
+                publication.MediaItems.AddRange(PublicationMediaBuilder.Build(string.Join(",", cleanedImages), null, publication.CreatedAtUtc));
+                changed = true;
                 continue;
             }
 
@@ -1273,13 +1287,15 @@ public static class SeedData
                 continue;
             }
 
-            publication.ImagesCsv = publication.Group switch
+            var rebuilt = publication.Group switch
             {
                 PublicationGroup.Inmuebles => BuildImagesCsv(primary, PropertyGalleryPool),
                 PublicationGroup.Rodados => BuildImagesCsv(primary, VehicleGalleryPool),
                 _ => BuildImagesCsv(primary, GeneralGalleryPool)
             };
 
+            publication.MediaItems.RemoveAll(x => x.MediaType == PublicationMediaType.Image);
+            publication.MediaItems.AddRange(PublicationMediaBuilder.Build(rebuilt, null, publication.CreatedAtUtc));
             changed = true;
         }
 

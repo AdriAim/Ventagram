@@ -7,6 +7,7 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
 {
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
     public DbSet<Publication> Publications => Set<Publication>();
+    public DbSet<PublicationMedia> PublicationMedia => Set<PublicationMedia>();
     public DbSet<ArgentineLocality> ArgentineLocalities => Set<ArgentineLocality>();
     public DbSet<PublicationGroupType> PublicationGroupTypes => Set<PublicationGroupType>();
     public DbSet<PublicationCategory> PublicationCategories => Set<PublicationCategory>();
@@ -56,6 +57,23 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
         modelBuilder.Entity<Publication>()
             .Property(x => x.Price)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<PublicationMedia>()
+            .Property(x => x.MediaType)
+            .HasConversion<byte>()
+            .HasColumnType("tinyint unsigned");
+
+        modelBuilder.Entity<PublicationMedia>()
+            .HasOne(x => x.Publication)
+            .WithMany(x => x.MediaItems)
+            .HasForeignKey(x => x.PublicationId);
+
+        modelBuilder.Entity<PublicationMedia>()
+            .HasIndex(x => new { x.PublicationId, x.SortOrder })
+            .IsUnique();
+
+        modelBuilder.Entity<PublicationMedia>()
+            .HasIndex(x => new { x.PublicationId, x.MediaType, x.IsPrimary });
 
         modelBuilder.Entity<PublicationCategory>()
             .Property(x => x.Group)

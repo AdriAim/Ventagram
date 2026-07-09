@@ -120,14 +120,13 @@ using (var scope = app.Services.CreateScope())
     await EnsurePublicationCategoriesTableAsync(db);
     await EnsurePublicationCategoryFieldsTableAsync(db);
     await EnsurePublicationFieldValuesTableAsync(db);
-    await EnsurePublicationVideoUrlColumnAsync(db);
     await EnsurePublicationCategoryIdColumnAsync(db);
     await EnsurePublicationReportReasonsTableAsync(db);
     await EnsureFavoriteListsTableAsync(db);
     await EnsureFavoriteListItemsTableAsync(db);
     await SeedData.InitializeAsync(db);
+    await EnsurePublicationMediaTableAsync(db);
     await EnsurePublicationCategoryIdColumnAsync(db);
-    await EnsurePublicationReportReasonIdColumnAsync(db);
     await EnsurePublicationReportCommentColumnAsync(db);
 }
 
@@ -632,7 +631,7 @@ static async Task EnsurePublicationFieldValuesTableAsync(VentagramDbContext db)
     }
 }
 
-static async Task EnsurePublicationVideoUrlColumnAsync(VentagramDbContext db)
+static async Task EnsurePublicationMediaTableAsync(VentagramDbContext db)
 {
     var connection = db.Database.GetDbConnection();
     var shouldClose = connection.State != System.Data.ConnectionState.Open;
@@ -643,7 +642,109 @@ static async Task EnsurePublicationVideoUrlColumnAsync(VentagramDbContext db)
 
     try
     {
-        await EnsureColumnAsync(connection, "Publications", "VideoUrl", "VARCHAR(400) NULL");
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS PublicationMedia (
+                Id INT NOT NULL AUTO_INCREMENT,
+                PublicationId INT NOT NULL,
+                SortOrder INT NOT NULL,
+                MediaType TINYINT UNSIGNED NOT NULL,
+                Url VARCHAR(1000) NOT NULL,
+                IsPrimary BIT(1) NOT NULL DEFAULT b'0',
+                CreatedAtUtc DATETIME(6) NOT NULL,
+                PRIMARY KEY (Id),
+                UNIQUE KEY UX_PublicationMedia_Publication_SortOrder (PublicationId, SortOrder),
+                KEY IX_PublicationMedia_Publication_Type_Primary (PublicationId, MediaType, IsPrimary)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    await BackfillPublicationMediaAsync(db);
+    await DropLegacyPublicationColumnsAsync(db);
+}
+
+static async Task BackfillPublicationMediaAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        if (!await ColumnExistsAsync(connection, "Publications", "ImagesCsv")
+            && !await ColumnExistsAsync(connection, "Publications", "VideoUrl"))
+        {
+            return;
+        }
+
+        var existingPublicationIds = new HashSet<int>(
+            await db.PublicationMedia
+                .AsNoTracking()
+                .Select(x => x.PublicationId)
+                .Distinct()
+                .ToListAsync());
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = """
+            SELECT Id, ImagesCsv, VideoUrl, CreatedAtUtc
+            FROM Publications
+            ORDER BY Id
+            """;
+
+        var publications = new List<(int Id, string? ImagesCsv, string? VideoUrl, DateTime CreatedAtUtc)>();
+        await using (var reader = await select.ExecuteReaderAsync())
+        {
+            var idOrdinal = reader.GetOrdinal("Id");
+            var imagesOrdinal = reader.GetOrdinal("ImagesCsv");
+            var videoOrdinal = reader.GetOrdinal("VideoUrl");
+            var createdOrdinal = reader.GetOrdinal("CreatedAtUtc");
+
+            while (await reader.ReadAsync())
+            {
+                publications.Add((
+                    reader.GetInt32(idOrdinal),
+                    reader.IsDBNull(imagesOrdinal) ? null : reader.GetString(imagesOrdinal),
+                    reader.IsDBNull(videoOrdinal) ? null : reader.GetString(videoOrdinal),
+                    reader.GetDateTime(createdOrdinal)));
+            }
+        }
+
+        var pendingMedia = new List<PublicationMedia>();
+        foreach (var publication in publications)
+        {
+            if (existingPublicationIds.Contains(publication.Id))
+            {
+                continue;
+            }
+
+            pendingMedia.AddRange(PublicationMediaBuilder.Build(
+                publication.ImagesCsv,
+                publication.VideoUrl,
+                publication.CreatedAtUtc)
+                .Select((item, index) =>
+                {
+                    item.PublicationId = publication.Id;
+                    item.SortOrder = index + 1;
+                    return item;
+                }));
+        }
+
+        if (pendingMedia.Count > 0)
+        {
+            db.PublicationMedia.AddRange(pendingMedia);
+            await db.SaveChangesAsync();
+        }
     }
     finally
     {
@@ -654,7 +755,7 @@ static async Task EnsurePublicationVideoUrlColumnAsync(VentagramDbContext db)
     }
 }
 
-static async Task EnsurePublicationReportReasonIdColumnAsync(VentagramDbContext db)
+static async Task DropLegacyPublicationColumnsAsync(VentagramDbContext db)
 {
     var connection = db.Database.GetDbConnection();
     var shouldClose = connection.State != System.Data.ConnectionState.Open;
@@ -665,58 +766,19 @@ static async Task EnsurePublicationReportReasonIdColumnAsync(VentagramDbContext 
 
     try
     {
-        await EnsureColumnAsync(connection, "PublicationReports", "ReasonId", "INT NULL");
-
-        var hasLegacyReasonColumn = false;
-        await using (var checkReason = connection.CreateCommand())
+        if (await ColumnExistsAsync(connection, "Publications", "ImagesCsv"))
         {
-            checkReason.CommandText = """
-                SELECT COUNT(*)
-                FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'PublicationReports'
-                  AND COLUMN_NAME = 'Reason'
-                """;
-
-            hasLegacyReasonColumn = Convert.ToInt32(await checkReason.ExecuteScalarAsync()) > 0;
+            await using var dropImages = connection.CreateCommand();
+            dropImages.CommandText = "ALTER TABLE Publications DROP COLUMN ImagesCsv";
+            await dropImages.ExecuteNonQueryAsync();
         }
 
-        if (hasLegacyReasonColumn)
+        if (await ColumnExistsAsync(connection, "Publications", "VideoUrl"))
         {
-            await using var backfill = connection.CreateCommand();
-            backfill.CommandText = """
-                UPDATE PublicationReports pr
-                LEFT JOIN PublicationReportReasons rr
-                  ON rr.Name = CASE
-                      WHEN COALESCE(pr.Reason, '') = 'Sin precio' THEN 'Precio no corresponde'
-                      ELSE COALESCE(pr.Reason, '')
-                  END
-                SET pr.ReasonId = COALESCE(rr.Id, 1)
-                WHERE pr.ReasonId IS NULL
-                """;
-            await backfill.ExecuteNonQueryAsync();
-
-            await using var dropReason = connection.CreateCommand();
-            dropReason.CommandText = "ALTER TABLE PublicationReports DROP COLUMN Reason";
-            await dropReason.ExecuteNonQueryAsync();
+            await using var dropVideo = connection.CreateCommand();
+            dropVideo.CommandText = "ALTER TABLE Publications DROP COLUMN VideoUrl";
+            await dropVideo.ExecuteNonQueryAsync();
         }
-
-        if (!hasLegacyReasonColumn)
-        {
-            await using var setDefault = connection.CreateCommand();
-            setDefault.CommandText = """
-                UPDATE PublicationReports
-                SET ReasonId = COALESCE(ReasonId, 1)
-                """;
-            await setDefault.ExecuteNonQueryAsync();
-        }
-
-        await using var alter = connection.CreateCommand();
-        alter.CommandText = """
-            ALTER TABLE PublicationReports
-            MODIFY COLUMN ReasonId INT NOT NULL
-            """;
-        await alter.ExecuteNonQueryAsync();
     }
     finally
     {
@@ -725,6 +787,28 @@ static async Task EnsurePublicationReportReasonIdColumnAsync(VentagramDbContext 
             await connection.CloseAsync();
         }
     }
+}
+
+static async Task<bool> ColumnExistsAsync(System.Data.Common.DbConnection connection, string tableName, string columnName)
+{
+    await using var check = connection.CreateCommand();
+    check.CommandText = """
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = @tableName
+          AND COLUMN_NAME = @columnName
+        """;
+    var tableParameter = check.CreateParameter();
+    tableParameter.ParameterName = "@tableName";
+    tableParameter.Value = tableName;
+    check.Parameters.Add(tableParameter);
+    var parameter = check.CreateParameter();
+    parameter.ParameterName = "@columnName";
+    parameter.Value = columnName;
+    check.Parameters.Add(parameter);
+
+    return Convert.ToInt32(await check.ExecuteScalarAsync()) > 0;
 }
 
 static async Task EnsureFavoriteListsTableAsync(VentagramDbContext db)

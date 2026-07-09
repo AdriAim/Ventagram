@@ -100,7 +100,7 @@ public class ContentController(
                 {
                     id = x.Id,
                     code = x.ToAdCode(),
-                    videoUrl = x.VideoUrl,
+                    videoUrl = x.PrimaryVideoUrl,
                     title = x.Title,
                     image = x.ImageList.FirstOrDefault(),
                     images = x.ImageList.Take(11).ToList(),
@@ -638,7 +638,7 @@ public class ContentController(
             publicationCode = item.ToAdCode(),
             price = $"{item.Currency} {item.Price:N0}",
             detailsUrl = $"/Publications/Details/{item.Id}",
-            videoUrl = item.VideoUrl,
+            videoUrl = item.PrimaryVideoUrl,
             images,
             groupName = item.Group.ToDisplayName(),
             isFavorite
