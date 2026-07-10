@@ -13,20 +13,49 @@
 </head>
 <body>
     <div class="page-backdrop"></div>
+    @{
+        var headerGroup = Context.Request.Query["group"].ToString();
+        var headerMode = Context.Request.Query["mode"].ToString();
+        var headerGroupActive = string.IsNullOrWhiteSpace(headerGroup) ? "Todos" : headerGroup;
+        var headerModeActive = string.IsNullOrWhiteSpace(headerMode) ? string.Empty : headerMode;
+    }
     <header class="site-header">
         <nav class="site-nav">
             <a class="brand-lockup" asp-page="/Index">
                 <img class="brand-mark" src="~/images/logo5.png" alt="Ventagram" />
                 <span class="brand-text">
                     <strong>Ventagram</strong>
-                    <small>Publicaciones con mapa y criterio</small>
+                    <small>Comunidad y Anuncios</small>
                 </span>
             </a>
-            <div class="nav-links">
-                <a asp-page="/Index" asp-route-mode="Galeria" asp-fragment="gallery-first">Explorar</a>
-                <a asp-page="/Publications/Create">Publicar</a>
-                <a asp-page="/Trash">Papelera</a>
-                <a asp-page="/Publications/DeleteAnonymous">Baja anónima</a>
+            <div class="site-nav-center">
+                <div class="header-category-strip" aria-label="Categorias principales">
+                    <a class="category-chip @(headerGroupActive == "Inmuebles" ? "active" : "")" href="/Buscar?group=Inmuebles@(string.IsNullOrWhiteSpace(headerModeActive) ? string.Empty : $"&mode={headerModeActive}")">
+                        <span class="category-icon" aria-hidden="true"><i class="fa-solid fa-house"></i></span>
+                        <span class="category-label">Inmuebles</span>
+                    </a>
+                    <a class="category-chip @(headerGroupActive == "Rodados" ? "active" : "")" href="/Buscar?group=Rodados@(string.IsNullOrWhiteSpace(headerModeActive) ? string.Empty : $"&mode={headerModeActive}")">
+                        <span class="category-icon" aria-hidden="true"><i class="fa-solid fa-car-side"></i></span>
+                        <span class="category-label">Rodados</span>
+                    </a>
+                    <a class="category-chip @(headerGroupActive == "Embarcaciones" ? "active" : "")" href="/Buscar?group=Embarcaciones@(string.IsNullOrWhiteSpace(headerModeActive) ? string.Empty : $"&mode={headerModeActive}")">
+                        <span class="category-icon" aria-hidden="true"><i class="fa-solid fa-ship"></i></span>
+                        <span class="category-label">Embarcaciones</span>
+                    </a>
+                    <a class="category-chip @(headerGroupActive == "Generales" ? "active" : "")" href="/Buscar?group=Generales@(string.IsNullOrWhiteSpace(headerModeActive) ? string.Empty : $"&mode={headerModeActive}")">
+                        <span class="category-icon" aria-hidden="true"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                        <span class="category-label">Electronica</span>
+                    </a>
+                    <a class="category-chip @(headerGroupActive == "Todos" ? "active" : "")" href="/Buscar?group=Todos@(string.IsNullOrWhiteSpace(headerModeActive) ? string.Empty : $"&mode={headerModeActive}")">
+                        <span class="category-icon" aria-hidden="true"><i class="fa-solid fa-globe"></i></span>
+                        <span class="category-label">Todos</span>
+                    </a>
+                </div>
+                <div class="site-nav-divider" aria-hidden="true"></div>
+                <div class="nav-links">
+                    <a href="/Buscar">Explorar</a>
+                    <a asp-page="/Publications/Create">Publicar</a>
+                </div>
             </div>
             <div class="nav-actions">
                 @if (User.Identity?.IsAuthenticated ?? false)

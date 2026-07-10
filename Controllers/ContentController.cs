@@ -29,7 +29,8 @@ public class ContentController(
     public async Task<IActionResult> Home([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         var currentUser = await LoadCurrentUserAsync();
-        var selectedGroup = PublicationGroupExtensions.ParseOrDefault(group);
+        var selectedGroup = ParseGroupFilter(group);
+        var selectedGroupName = selectedGroup?.ToDisplayName() ?? "Todos";
         var selectedMode = string.IsNullOrWhiteSpace(mode) ? "Galeria" : mode;
         var safePageSize = NormalizeTextPageSize(pageSize);
         var safePage = Math.Max(1, page);
@@ -76,7 +77,7 @@ public class ContentController(
             : (publications.Count > 0 ? 1 : 0);
         var model = new HomeContentViewModel
         {
-            Group = selectedGroup.ToDisplayName(),
+            Group = selectedGroupName,
             GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
             Mode = selectedMode,
             Query = query,
@@ -93,7 +94,7 @@ public class ContentController(
             FavoriteLists = favoriteLists,
             MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
             FlashMessage = flash,
-            GalleryApiEndpoint = $"/api/content/gallery-items?group={Uri.EscapeDataString(selectedGroup.ToDisplayName())}&query={Uri.EscapeDataString(query ?? string.Empty)}",
+            GalleryApiEndpoint = $"/api/content/gallery-items?group={Uri.EscapeDataString(selectedGroupName)}&query={Uri.EscapeDataString(query ?? string.Empty)}",
             MarkersJson = JsonSerializer.Serialize(publications
                 .Where(x => x.Latitude.HasValue && x.Longitude.HasValue)
                 .Select(x => new
@@ -114,11 +115,101 @@ public class ContentController(
         return PartialView("~/Views/Content/Home.cshtml", model);
     }
 
+    [HttpGet("browse")]
+    public async Task<IActionResult> Browse([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    {
+        var currentUser = await LoadCurrentUserAsync();
+        var selectedGroup = ParseGroupFilter(group);
+        var selectedGroupName = selectedGroup?.ToDisplayName() ?? "Todos";
+        var selectedMode = string.IsNullOrWhiteSpace(mode) ? "Galeria" : mode;
+        var safePageSize = NormalizeTextPageSize(pageSize);
+        var safePage = Math.Max(1, page);
+        var publications = new List<Publication>();
+        var totalResults = 0;
+        var userLocalityLabel = currentUser?.ArgentineLocality?.Locality;
+        var userLocalityLatitude = currentUser?.ArgentineLocality?.Latitude;
+        var userLocalityLongitude = currentUser?.ArgentineLocality?.Longitude;
+        var favoritePublicationIds = new HashSet<int>();
+        var favoriteLists = new List<FavoriteListSummaryViewModel>();
+
+        if (selectedMode == "Texto")
+        {
+            totalResults = await publicationService.CountActivePublicationsAsync(selectedGroup, query);
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalResults / (double)safePageSize));
+            safePage = Math.Min(safePage, totalPages);
+            publications = await publicationService.SearchActivePublicationsPageAsync(
+                selectedGroup,
+                query,
+                (safePage - 1) * safePageSize,
+                safePageSize,
+                userLocalityLatitude,
+                userLocalityLongitude);
+        }
+        else if (selectedMode == "Mapa")
+        {
+            publications = await publicationService.SearchActivePublicationsAsync(
+                selectedGroup,
+                query,
+                userLocalityLatitude,
+                userLocalityLongitude);
+            totalResults = publications.Count;
+            publications = LimitMapPublications(publications, MaxMapPublications);
+        }
+
+        if (currentUserAccessor.UserId is int currentUserId)
+        {
+            favoritePublicationIds = await favoriteService.GetFavoritePublicationIdsAsync(currentUserId, publications.Select(x => x.Id));
+            favoriteLists = await favoriteService.GetListSummariesAsync(currentUserId);
+        }
+
+        var computedTotalPages = selectedMode == "Texto"
+            ? Math.Max(1, (int)Math.Ceiling(totalResults / (double)safePageSize))
+            : (publications.Count > 0 ? 1 : 0);
+        var model = new HomeContentViewModel
+        {
+            Group = selectedGroupName,
+            GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
+            Mode = selectedMode,
+            Query = query,
+            Publications = publications,
+            Page = safePage,
+            PageSize = safePageSize,
+            TotalResults = totalResults,
+            TotalPages = computedTotalPages,
+            UserLocalityLabel = userLocalityLabel,
+            UserLocalityLatitude = userLocalityLatitude,
+            UserLocalityLongitude = userLocalityLongitude,
+            CanManageFavorites = currentUserAccessor.IsAuthenticated,
+            FavoritePublicationIds = favoritePublicationIds,
+            FavoriteLists = favoriteLists,
+            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            FlashMessage = flash,
+            GalleryApiEndpoint = $"/api/content/gallery-items?group={Uri.EscapeDataString(selectedGroupName)}&query={Uri.EscapeDataString(query ?? string.Empty)}",
+            MarkersJson = JsonSerializer.Serialize(publications
+                .Where(x => x.Latitude.HasValue && x.Longitude.HasValue)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    code = x.ToAdCode(),
+                    videoUrl = x.PrimaryVideoUrl,
+                    title = x.Title,
+                    image = x.ImageList.FirstOrDefault(),
+                    images = x.ImageList.Take(11).ToList(),
+                    detailsUrl = $"/Publications/Details/{x.Id}",
+                    lat = x.Latitude,
+                    lng = x.Longitude,
+                    price = $"{x.Currency} {x.Price:N0}"
+                }))
+        };
+
+        return PartialView("~/Views/Content/Browse.cshtml", model);
+    }
+
     [HttpGet("gallery-items")]
     public async Task<IActionResult> GalleryItems([FromQuery] string? group = "Inmuebles", [FromQuery] string? query = null, [FromQuery] int offset = 0, [FromQuery] int limit = 20)
     {
         var currentUser = await LoadCurrentUserAsync();
-        var selectedGroup = PublicationGroupExtensions.ParseOrDefault(group);
+        var selectedGroup = ParseGroupFilter(group);
         var safeOffset = Math.Max(0, offset);
         var safeLimit = Math.Clamp(limit, 1, 60);
         var items = await publicationService.SearchActivePublicationsPageAsync(
@@ -284,7 +375,7 @@ public class ContentController(
     [HttpGet("categories")]
     public async Task<IActionResult> Categories([FromQuery] string? group = null)
     {
-        var selectedGroup = PublicationGroupExtensions.ParseOrDefault(group);
+        var selectedGroup = ParseGroupFilter(group) ?? PublicationGroup.Inmuebles;
         var categories = await publicationCategoryService.GetActiveByGroupAsync(selectedGroup);
 
         return Ok(categories.Select(x => new
@@ -593,6 +684,13 @@ public class ContentController(
             200 => 200,
             _ => 50
         };
+    }
+
+    private static PublicationGroup? ParseGroupFilter(string? value)
+    {
+        return string.Equals(value?.Trim(), "Todos", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : PublicationGroupExtensions.ParseOrDefault(value);
     }
 
     /// <summary>

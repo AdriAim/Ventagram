@@ -1,0 +1,14 @@
+@page "/Buscar"
+@model BrowseModel
+@{
+    ViewData["Title"] = "Buscar anuncios";
+    var endpoint = $"/api/content/browse?group={Uri.EscapeDataString(Model.Group)}&mode={Uri.EscapeDataString(Model.Mode)}&query={Uri.EscapeDataString(Model.Query ?? string.Empty)}&page={Model.CurrentPage}&pageSize={Model.PageSize}";
+}
+
+<div id="api-page"
+     data-page-kind="browse"
+     data-api-endpoint="@endpoint"
+     data-maptiler-key="@Model.MapTilerKey">
+</div>
+
+<partial name="_GlobalModals" model="Model" />

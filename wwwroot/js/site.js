@@ -91,7 +91,7 @@
 
       if (idInput) idInput.value = publicationId || "0";
       if (titleNode) {
-        const titlePrefix = publicationCode ? `${publicationCode} Â· ` : "";
+        const titlePrefix = publicationCode ? `${publicationCode} · ` : "";
         titleNode.textContent = title ? `${titlePrefix}Denunciar: ${title}` : "Selecciona un motivo";
       }
       if (defaultReason) defaultReason.checked = true;
@@ -428,7 +428,7 @@
     if (!modal || !body || !title || !listId) return;
     rememberLastFavoriteList(listId);
 
-    title.textContent = `Cargando ${fallbackName}`;
+    title.textContent = `Favoritos: ${fallbackName}`;
     body.innerHTML = `<div class="preview-modal-loading">Cargando favoritos...</div>`;
     modal.hidden = false;
     modal.classList.add("is-open");
@@ -445,9 +445,9 @@
     }
 
     const items = Array.isArray(result?.items) ? result.items : [];
-    title.textContent = result?.list?.name || fallbackName;
+    title.textContent = `Favoritos: ${result?.list?.name || fallbackName}`;
     body.innerHTML = items.length
-      ? `<section class="favorites-modal-grid">${items.map(item => buildGalleryCard(item, false)).join("")}</section>`
+      ? `<section class="favorites-modal-grid">${items.map(item => buildGalleryCard(item, false, { showReportButton: false })).join("")}</section>`
       : `<section class="empty-state"><h2>La lista esta vacia</h2><p>Guarda publicaciones con la estrella para verlas aca.</p></section>`;
     wireGalleryCards();
     wireFavoriteActions(body);
@@ -2648,7 +2648,7 @@
     return Math.max(1, Math.floor((availableWidth + gap) / (minCardWidth + gap)));
   }
 
-  function buildGalleryCard(item, isFirstCard) {
+  function buildGalleryCard(item, isFirstCard, options = {}) {
     const title = escapeHtml(item?.title || "");
     const galleryTitle = escapeHtml(item?.galleryTitle || item?.title || "");
     const publicationId = escapeAttribute(item?.id || "");
@@ -2656,6 +2656,7 @@
     const detailsUrl = escapeAttribute(item?.detailsUrl || "#");
     const price = escapeHtml(item?.price || "");
     const videoUrl = escapeAttribute(item?.videoUrl || "");
+    const showReportButton = options.showReportButton !== false;
     const images = Array.isArray(item?.images) && item.images.length
       ? item.images
       : ["/images/logo4.png"];
@@ -2678,7 +2679,7 @@
             ? `<video src="${videoUrl}" class="gallery-carousel-video" preload="metadata" muted playsinline></video><button type="button" class="gallery-play-toggle" data-gallery-play-toggle="true" aria-label="Reproducir video"></button><button type="button" class="gallery-audio-toggle" data-gallery-audio-toggle="true" aria-label="Activar audio">Activar audio</button>`
             : `<img src="${firstImage}" alt="${title}" class="gallery-carousel-image" loading="lazy" decoding="async" />`}
           <span class="gallery-badge">${price}</span>
-          <button type="button" class="gallery-action-button gallery-report-overlay report-trigger" data-publication-id="${publicationId}" data-publication-code="${publicationCode}" data-publication-title="${title}" aria-label="Denunciar ${title}">Denunciar</button>
+          ${showReportButton ? `<button type="button" class="gallery-action-button gallery-report-overlay report-trigger" data-publication-id="${publicationId}" data-publication-code="${publicationCode}" data-publication-title="${title}" aria-label="Denunciar ${title}">Denunciar</button>` : ""}
           ${navButtons}
           <span class="gallery-title-overlay">${galleryTitle}</span>
           <button type="button" class="favorite-toggle gallery-favorite-corner ${isFavorite ? "is-active" : ""}" data-favorite-toggle="true" data-publication-id="${publicationId}" data-publication-title="${title}" data-suggested-list-name="${suggestedListName}" title="Añadir a mi lista de favoritos" aria-label="Añadir a mi lista de favoritos">${renderFavoriteIcon(isFavorite)}</button>
