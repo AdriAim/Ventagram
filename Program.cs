@@ -88,6 +88,8 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
                 {
                     context.Properties.IsPersistent = true;
                 }
+
+                context.Response.Cookies.Delete(NavigationLocalityService.CookieName);
             };
         });
 }
@@ -104,6 +106,7 @@ builder.Services.AddScoped<PublicationCategoryFieldService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<FavoriteService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
+builder.Services.AddScoped<NavigationLocalityService>();
 
 var app = builder.Build();
 

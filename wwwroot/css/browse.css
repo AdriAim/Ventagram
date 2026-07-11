@@ -1,0 +1,29 @@
+#api-page.is-loading {
+    opacity: .65;
+    pointer-events: none;
+    transition: opacity .15s ease;
+}
+
+#api-page [data-browse-scroll-target],
+#api-page [data-map-layout],
+#api-page .classified-list,
+#api-page .gallery-shell {
+    scroll-margin-top: 88px;
+}
+
+@media (min-width: 781px) {
+    [data-map-layout] {
+        align-items: stretch;
+    }
+
+    [data-map-layout] .map-canvas {
+        width: 100%;
+        min-height: 360px;
+    }
+}
+
+@media (max-width: 780px) {
+    [data-map-layout] .map-canvas {
+        min-height: 360px;
+    }
+}

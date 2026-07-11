@@ -6,8 +6,8 @@
     var nextPage = Math.Min(Math.Max(1, Model.TotalPages), Model.Page + 1);
 }
 
-<section class="search-panel">
-    <form method="get" action="/Buscar" class="search-grid">
+<section class="search-panel" id="search-panel" data-browse-search-panel>
+    <form method="get" action="/Buscar" class="search-grid" data-browse-search-form>
         <label>
             <span>Qué buscás</span>
             <input name="query" value="@Model.Query" placeholder="Ej. departamento, Ford Fiesta, iPhone" />
@@ -61,7 +61,7 @@
     <div class="status-banner">@Model.FlashMessage</div>
 }
 
-@if (Model.CanManageFavorites)
+@if (false && Model.CanManageFavorites)
 {
     <section class="favorites-strip" data-favorites-summary>
         <div class="favorites-strip-copy">
@@ -88,14 +88,14 @@
 
 @if (currentMode != "Galeria" && !Model.Publications.Any())
 {
-    <section class="empty-state">
+    <section class="empty-state" data-browse-scroll-target>
         <h2>No hay resultados para esa búsqueda.</h2>
         <p>Ajustá el grupo o la palabra clave para ver publicaciones activas.</p>
     </section>
 }
 else if (currentMode == "Mapa")
 {
-    <section class="map-layout">
+    <section class="map-layout" data-browse-scroll-target data-map-layout>
         <div class="map-canvas" id="map"
              data-maptiler-key="@Model.MapTilerKey"
              data-map-initial-lat="@Model.UserLocalityLatitude"
@@ -112,8 +112,8 @@ else if (currentMode == "Mapa")
         <div class="map-results" data-map-selection-panel>
             <div class="map-results-copy">
                 <span class="gallery-kicker">Pin seleccionado</span>
-                <h2>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Elegí una publicación en el mapa" : $"{currentGroup} cerca de {Model.UserLocalityLabel}")</h2>
-                <p>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Al tocar un pin, acá se muestra la misma tarjeta visual de la galería." : $"El mapa arranca centrado en {Model.UserLocalityLabel} y prioriza los anuncios más cercanos.")</p>
+                @* <h2>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Elegí una publicación en el mapa" : $"{currentGroup} cerca de {Model.UserLocalityLabel}")</h2>
+                <p>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Al tocar un pin, acá se muestra la misma tarjeta visual de la galería." : $"El mapa arranca centrado en {Model.UserLocalityLabel} y prioriza los anuncios más cercanos.")</p> *@
             </div>
             <div class="map-selection-card" data-map-selection-card></div>
         </div>
@@ -142,7 +142,7 @@ else if (currentMode == "Texto")
         </div>
     </section>
 
-    <section class="classified-list">
+    <section class="classified-list" data-browse-scroll-target>
         @foreach (var item in Model.Publications)
         {
             var publicationCode = item.ToAdCode();
@@ -181,7 +181,7 @@ else if (currentMode == "Texto")
 }
 else
 {
-    <section class="gallery-shell">
+    <section class="gallery-shell" data-browse-scroll-target>
         <div class="gallery-header">
             <div>
                 <span class="gallery-kicker">Vista galería</span>

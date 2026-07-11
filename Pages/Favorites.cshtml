@@ -1,0 +1,45 @@
+@page "/Favoritos"
+@model FavoritesModel
+@{
+    ViewData["Title"] = "Favoritos";
+}
+
+<section class="favorites-strip favorites-page-strip" data-favorites-summary>
+    <div class="favorites-strip-copy">
+        <span class="eyebrow">Mis listas</span>
+        <h2>Favoritos guardados</h2>
+    </div>
+    <div class="favorites-strip-actions" data-favorites-summary-actions>
+        @if (Model.FavoriteLists.Any())
+        {
+            @foreach (var list in Model.FavoriteLists)
+            {
+                <button type="button" class="view-pill" data-favorite-list-open="true" data-list-id="@list.Id" data-list-name="@list.Name">
+                    @list.Name (@list.ItemCount)
+                </button>
+            }
+        }
+        else
+        {
+            <span class="field-hint">Todavia no guardaste publicaciones en tus listas.</span>
+        }
+    </div>
+</section>
+
+<section class="gallery-shell" data-favorites-page-results @(Model.FavoriteLists.Any() ? null : "hidden")>
+    <div class="gallery-header">
+        <div>
+            <span class="gallery-kicker">Vista galería</span>
+            <h2 data-favorites-page-title>Seleccioná una lista</h2>
+        </div>
+    </div>
+
+    <div class="preview-modal-loading" data-favorites-page-loading hidden>Cargando favoritos...</div>
+    <section class="empty-state" data-favorites-page-empty @(Model.FavoriteLists.Any() ? null : "hidden")>
+        <h2>Elegí una lista para ver tus guardados.</h2>
+        <p>Las publicaciones se muestran acá mismo, en formato galería.</p>
+    </section>
+    <div class="gallery-rail" data-favorites-page-gallery></div>
+</section>
+
+<partial name="_GlobalModals" model="Model" />

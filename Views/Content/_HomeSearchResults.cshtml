@@ -6,7 +6,7 @@
     var nextPage = Math.Min(Math.Max(1, Model.TotalPages), Model.Page + 1);
 }
 
-<section class="search-panel">
+<section class="search-panel" id="search-panel">
     <form method="get" action="/" class="search-grid">
         <label>
             <span>Qué buscás</span>
@@ -61,7 +61,7 @@
     <div class="status-banner">@Model.FlashMessage</div>
 }
 
-@if (Model.CanManageFavorites)
+@if (false && Model.CanManageFavorites)
 {
     <section class="favorites-strip" data-favorites-summary>
         <div class="favorites-strip-copy">

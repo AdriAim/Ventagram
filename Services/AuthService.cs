@@ -90,6 +90,8 @@ public class AuthService(
 
     public async Task SignInAsync(ApplicationUser user)
     {
+        httpContextAccessor.HttpContext?.Response.Cookies.Delete(NavigationLocalityService.CookieName);
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),

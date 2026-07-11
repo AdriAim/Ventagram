@@ -1,0 +1,61 @@
+@page
+@model Ventagram.Pages.Account.ChangeLocalityModel
+@{
+    ViewData["Title"] = "Cambiar localidad";
+}
+
+<section class="form-shell narrow">
+    <div class="section-heading">
+        <span class="eyebrow">Cuenta</span>
+        <h1>Cambiar localidad</h1>
+        <p>Esta localidad se usa para priorizar anuncios cercanos y sugerir el mapa inicial.</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="status-banner success-banner">@Model.SuccessMessage</div>
+    }
+
+    <form method="post" class="stack-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <label>
+            <span>Localidad de residencia</span>
+            <select asp-for="Input.ArgentineLocalityId">
+                <option value="">Selecciona tu localidad</option>
+                @{
+                    string? currentProvince = null;
+                }
+                @foreach (var locality in Model.AvailableLocalities)
+                {
+                    if (!string.Equals(currentProvince, locality.Province, StringComparison.Ordinal))
+                    {
+                        if (currentProvince is not null)
+                        {
+                            @:</optgroup>
+                        }
+
+                        currentProvince = locality.Province;
+                        @:<optgroup label="@currentProvince">
+                    }
+
+                    <option value="@locality.Id">@locality.Locality</option>
+                }
+                @if (currentProvince is not null)
+                {
+                    @:</optgroup>
+                }
+            </select>
+            <span asp-validation-for="Input.ArgentineLocalityId" class="text-danger"></span>
+        </label>
+
+        <div class="hero-actions">
+            <button type="submit" class="primary-pill">Guardar localidad</button>
+            <a class="ghost-pill" asp-page="/Index">Volver</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

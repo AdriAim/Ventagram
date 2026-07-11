@@ -32,33 +32,45 @@
 
         <div class="register-row">
             <label>
-                <span>Localidad de residencia</span>
-                <select asp-for="Input.ArgentineLocalityId">
-                    <option value="">Selecciona tu localidad</option>
-                    @{
-                        string? currentProvince = null;
-                    }
-                    @foreach (var locality in Model.AvailableLocalities)
-                    {
-                        if (!string.Equals(currentProvince, locality.Province, StringComparison.Ordinal))
+                <div class="register-locality-heading">
+                    <span class="register-locality-title">
+                        <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                        <span>Localidad de residencia</span>
+                    </span>
+                </div>
+                <div class="register-locality-actions">
+                    <span class="field-hint">Si quieres, podemos detectar tu ubicacion actual y elegir la localidad mas cercana de la lista.</span>
+                </div>
+                <div class="register-locality-picker">
+                    <select asp-for="Input.ArgentineLocalityId" data-register-locality-select>
+                        <option value="">Selecciona tu localidad</option>
+                        @{
+                            string? currentProvince = null;
+                        }
+                        @foreach (var locality in Model.AvailableLocalities)
                         {
-                            if (currentProvince is not null)
+                            if (!string.Equals(currentProvince, locality.Province, StringComparison.Ordinal))
                             {
-                                @:</optgroup>
+                                if (currentProvince is not null)
+                                {
+                                    @:</optgroup>
+                                }
+
+                                currentProvince = locality.Province;
+                                @:<optgroup label="@currentProvince">
                             }
 
-                            currentProvince = locality.Province;
-                            @:<optgroup label="@currentProvince">
+                            <option value="@locality.Id" data-latitude="@locality.Latitude" data-longitude="@locality.Longitude" data-province="@locality.Province">@locality.Locality</option>
                         }
-
-                        <option value="@locality.Id">@locality.Locality</option>
-                    }
-                    @if (currentProvince is not null)
-                    {
-                        @:</optgroup>
-                    }
-                </select>
-                <span class="field-hint">Usaremos esta localidad de Argentina para proponerte la ubicacion inicial al publicar.</span>
+                        @if (currentProvince is not null)
+                        {
+                            @:</optgroup>
+                        }
+                    </select>
+                    <button type="button" class="ghost-pill compact" data-detect-locality>Detectar</button>
+                </div>
+                <span class="field-hint" data-register-locality-status></span>
+                <span class="field-hint">Usaremos esta localidad para proponerte la ubicacion inicial al publicar.</span>
                 <span asp-validation-for="Input.ArgentineLocalityId" class="text-danger"></span>
             </label>
         </div>

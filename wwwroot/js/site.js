@@ -4,16 +4,22 @@
   let openPublicationPreview = null;
   const favoriteLastListStorageKey = "ventagram:last-favorite-list-id";
   const likedPublicationsStorageKey = "ventagram:liked-publications";
+  const NAVIGATION_LOCALITY_COOKIE = "ventagram_nav_locality_id";
   const maptilerKeyHealth = new Map();
 
   document.addEventListener("DOMContentLoaded", async () => {
     wirePhoneMasks(document);
+    wireHeaderLocality(document);
+    wireRegisterLocalityDetection(document);
     wireReportModal();
+    wireAuthRequiredModal();
     wirePublicationPreviewModal();
     wireDetailMediaOverlay();
     wireDetailGalleryLayout();
     wireFavoriteModal();
     wireFavoriteListModal();
+    wireFavoriteActions(document);
+    initFavoritesPage();
     await loadApiPage();
   });
 
@@ -48,6 +54,18 @@
     wireFavoriteActions(host);
     wireReportForm();
     wireCreateForm();
+    scrollToSearchPanelIfRequested();
+  }
+
+  function scrollToSearchPanelIfRequested() {
+    if (window.location.hash !== "#search-panel") return;
+
+    const target = document.getElementById("search-panel");
+    if (!target) return;
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function wireReportModal() {
@@ -102,6 +120,49 @@
     });
   }
 
+  function wireAuthRequiredModal() {
+    const modal = document.getElementById("authRequiredModal");
+    if (!modal) return;
+    if (modal.dataset.bound === "true") return;
+    modal.dataset.bound = "true";
+
+    const close = () => {
+      modal.hidden = true;
+      modal.classList.remove("is-open");
+      document.body.classList.remove("preview-open");
+    };
+
+    modal.addEventListener("click", event => {
+      const closeTrigger = event.target.closest("[data-auth-required-close='true']");
+      if (!closeTrigger) return;
+      event.preventDefault();
+      close();
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && modal.classList.contains("is-open")) {
+        close();
+      }
+    });
+
+    document.querySelectorAll("[data-auth-required-favorites='true']").forEach(link => {
+      if (link.dataset.authRequiredBound === "true") return;
+      link.dataset.authRequiredBound = "true";
+      link.addEventListener("click", event => {
+        event.preventDefault();
+        showAuthRequiredModal();
+      });
+    });
+  }
+
+  function showAuthRequiredModal() {
+    const modal = document.getElementById("authRequiredModal");
+    if (!modal) return;
+    modal.hidden = false;
+    modal.classList.add("is-open");
+    document.body.classList.add("preview-open");
+  }
+
   function wirePhoneMasks(root) {
     const inputs = root.querySelectorAll('input[data-phone-mask="ar"]');
     inputs.forEach(input => {
@@ -148,6 +209,262 @@
       input.addEventListener("blur", formatPhone);
       syncPhoneMode();
     });
+  }
+
+  function wireHeaderLocality(root = document) {
+    const form = root.querySelector("[data-header-locality-form]");
+    if (!form || form.dataset.bound === "true") return;
+
+    const input = form.querySelector("[data-header-locality-input]");
+    const status = form.querySelector("[data-header-locality-status]");
+    const current = form.querySelector("[data-header-locality-current]");
+    const detectButton = form.querySelector("[data-header-locality-detect]");
+    const datalist = root.getElementById("header-locality-options");
+    if (!input || !status || !current || !detectButton || !datalist) return;
+
+    form.dataset.bound = "true";
+    const options = Array.from(datalist.options).map(option => ({
+      id: Number(option.dataset.localityId || 0),
+      label: option.value || "",
+      locality: option.dataset.locality || "",
+      province: option.dataset.province || "",
+      latitude: Number(option.dataset.latitude),
+      longitude: Number(option.dataset.longitude)
+    }));
+
+    const setStatus = (message, isError = false) => {
+      status.textContent = message;
+      status.classList.toggle("text-danger", isError);
+      status.classList.toggle("is-visible", Boolean(message));
+    };
+
+    const applyLocality = locality => {
+      writeCookie(NAVIGATION_LOCALITY_COOKIE, String(locality.id), 365);
+      current.textContent = `Anuncios cerca de ${locality.label}`;
+      input.value = "";
+      setStatus(`Buscando cerca de ${locality.label}. Recargando resultados...`);
+      window.location.reload();
+    };
+
+    const applyMatchedLocality = () => {
+      const selected = matchHeaderLocality(options, input.value);
+      if (!selected) return false;
+      applyLocality(selected);
+      return true;
+    };
+
+    const detectNearestLocality = ({ silent = false } = {}) => {
+      if (!navigator.geolocation) {
+        if (!silent) {
+          setStatus("Tu navegador no permite detectar ubicacion automaticamente.", true);
+        }
+        return;
+      }
+
+      const originalLabel = detectButton.textContent;
+      detectButton.disabled = true;
+      detectButton.textContent = "Detectando...";
+      if (!silent) {
+        setStatus("Esperando permiso para acceder a tu ubicacion.");
+      }
+
+      navigator.geolocation.getCurrentPosition(position => {
+        const nearest = findNearestLocalityFromCollection(options, position.coords.latitude, position.coords.longitude);
+        detectButton.disabled = false;
+        detectButton.textContent = originalLabel;
+
+        if (!nearest) {
+          if (!silent) {
+            setStatus("No encontramos una localidad cercana en la lista disponible.", true);
+          }
+          return;
+        }
+
+        applyLocality(nearest);
+      }, error => {
+        detectButton.disabled = false;
+        detectButton.textContent = originalLabel;
+        if (!silent) {
+          setStatus(mapRegisterGeolocationError(error), true);
+        }
+      }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
+      });
+    };
+
+    detectButton.addEventListener("click", () => {
+      detectNearestLocality();
+    });
+
+    input.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      if (!applyMatchedLocality()) {
+        setStatus("Escribe una localidad valida de la lista para usarla en las busquedas.", true);
+      }
+    });
+
+    input.addEventListener("input", () => {
+      status.classList.remove("text-danger");
+      status.classList.remove("is-visible");
+      status.textContent = "";
+    });
+
+    input.addEventListener("change", () => {
+      applyMatchedLocality();
+    });
+
+    input.addEventListener("blur", () => {
+      applyMatchedLocality();
+    });
+
+    if (!readCookie(NAVIGATION_LOCALITY_COOKIE) && !input.value.trim() && navigator.permissions?.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(result => {
+        if (result.state === "granted") {
+          detectNearestLocality({ silent: true });
+        }
+      }).catch(() => {});
+    }
+  }
+
+  function wireRegisterLocalityDetection(root = document) {
+    const form = root.querySelector(".register-form");
+    if (!form || form.dataset.localityDetectionBound === "true") return;
+
+    const button = form.querySelector("[data-detect-locality]");
+    const select = form.querySelector("[data-register-locality-select]");
+    const status = form.querySelector("[data-register-locality-status]");
+    if (!button || !select || !status) return;
+
+    form.dataset.localityDetectionBound = "true";
+
+    const setStatus = (message, isError = false) => {
+      status.textContent = message;
+      status.classList.toggle("text-danger", isError);
+    };
+
+    button.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        setStatus("Tu navegador no permite detectar ubicacion automaticamente.", true);
+        return;
+      }
+
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = "Detectando...";
+      setStatus("Esperando permiso para acceder a tu ubicacion.");
+
+      navigator.geolocation.getCurrentPosition(position => {
+        const nearest = findNearestRegisterLocality(select, position.coords.latitude, position.coords.longitude);
+        button.disabled = false;
+        button.textContent = originalLabel;
+
+        if (!nearest) {
+          setStatus("No encontramos una localidad cercana en la lista disponible.", true);
+          return;
+        }
+
+        select.value = nearest.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        setStatus(`Ubicacion detectada. Seleccionamos ${nearest.locality}, ${nearest.province}.`);
+      }, error => {
+        button.disabled = false;
+        button.textContent = originalLabel;
+        setStatus(mapRegisterGeolocationError(error), true);
+      }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
+      });
+    });
+  }
+
+  function findNearestRegisterLocality(select, latitude, longitude) {
+    const localities = Array.from(select.options)
+      .map(option => ({
+        value: option.value,
+        locality: option.textContent?.trim() || "",
+        province: option.dataset.province || "",
+        latitude: Number(option.dataset.latitude),
+        longitude: Number(option.dataset.longitude)
+      }))
+      .filter(option => option.value && Number.isFinite(option.latitude) && Number.isFinite(option.longitude));
+
+    if (!localities.length) return null;
+    return findNearestLocalityFromCollection(localities, latitude, longitude);
+  }
+
+  function findNearestLocalityFromCollection(localities, latitude, longitude) {
+    let nearest = null;
+    for (const locality of localities) {
+      const distance = haversineDistanceKm(latitude, longitude, locality.latitude, locality.longitude);
+      if (!nearest || distance < nearest.distance) {
+        nearest = { ...locality, distance };
+      }
+    }
+
+    return nearest;
+  }
+
+  function matchHeaderLocality(localities, rawValue) {
+    const normalized = normalizeLocalityText(rawValue);
+    if (!normalized) return null;
+
+    return localities.find(option =>
+      normalizeLocalityText(option.label) === normalized
+      || normalizeLocalityText(option.locality) === normalized) || null;
+  }
+
+  function haversineDistanceKm(lat1, lng1, lat2, lng2) {
+    const toRadians = degrees => degrees * (Math.PI / 180);
+    const earthRadiusKm = 6371;
+    const deltaLat = toRadians(lat2 - lat1);
+    const deltaLng = toRadians(lng2 - lng1);
+    const a = Math.sin(deltaLat / 2) ** 2
+      + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(deltaLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
+  function mapRegisterGeolocationError(error) {
+    switch (error?.code) {
+      case error.PERMISSION_DENIED:
+        return "No diste permiso para detectar tu ubicacion.";
+      case error.POSITION_UNAVAILABLE:
+        return "No pudimos obtener tu ubicacion actual.";
+      case error.TIMEOUT:
+        return "La deteccion de ubicacion tardo demasiado. Intenta otra vez.";
+      default:
+        return "No se pudo detectar tu ubicacion.";
+    }
+  }
+
+  function normalizeLocalityText(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+  }
+
+  function writeCookie(name, value, maxAgeDays) {
+    const maxAgeSeconds = Math.max(1, Math.floor(maxAgeDays * 24 * 60 * 60));
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+  }
+
+  function readCookie(name) {
+    const prefix = `${name}=`;
+    return document.cookie
+      .split(";")
+      .map(item => item.trim())
+      .find(item => item.startsWith(prefix))
+      ?.slice(prefix.length) || "";
+  }
+
+  function eraseCookie(name) {
+    document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
   }
 
   function extractArgPhoneDigits(value) {
@@ -244,6 +561,20 @@
     });
   }
 
+  function initFavoritesPage() {
+    const container = document.querySelector("[data-favorites-page-results]");
+    if (!container || container.dataset.bound === "true") return;
+
+    container.dataset.bound = "true";
+    const buttons = Array.from(document.querySelectorAll("[data-favorite-list-open='true'][data-list-id]"));
+    if (!buttons.length) return;
+
+    const lastListId = readLastFavoriteList();
+    const initialButton = buttons.find(button => String(button.getAttribute("data-list-id")) === String(lastListId))
+      || buttons[0];
+    initialButton?.click();
+  }
+
   function wireGalleryActionMenus(root = document) {
     root.querySelectorAll("[data-gallery-menu-toggle='true']").forEach(button => {
       if (button.dataset.bound === "true") return;
@@ -332,6 +663,11 @@
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 401) {
+          close();
+          showAuthRequiredModal();
+          return;
+        }
         ventagramFlashMessage = result?.message || "No se pudo guardar en favoritos.";
         close();
         await loadApiPage();
@@ -373,6 +709,10 @@
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401) {
+        showAuthRequiredModal();
+        return;
+      }
       ventagramFlashMessage = result?.message || "Tenes que iniciar sesion para usar favoritos.";
       await loadApiPage();
       return;
@@ -422,11 +762,19 @@
   }
 
   async function openFavoriteListModal(listId, fallbackName = "Mi lista") {
+    if (!listId) return;
+    rememberLastFavoriteList(listId);
+
+    const inlineContainer = document.querySelector("[data-favorites-page-results]");
+    if (inlineContainer) {
+      await renderFavoriteListInline(inlineContainer, listId, fallbackName);
+      return;
+    }
+
     const modal = document.getElementById("favoriteListModal");
     const body = document.getElementById("favoriteListModalBody");
     const title = document.getElementById("favoriteListModalTitle");
-    if (!modal || !body || !title || !listId) return;
-    rememberLastFavoriteList(listId);
+    if (!modal || !body || !title) return;
 
     title.textContent = `Favoritos: ${fallbackName}`;
     body.innerHTML = `<div class="preview-modal-loading">Cargando favoritos...</div>`;
@@ -451,6 +799,56 @@
       : `<section class="empty-state"><h2>La lista esta vacia</h2><p>Guarda publicaciones con la estrella para verlas aca.</p></section>`;
     wireGalleryCards();
     wireFavoriteActions(body);
+  }
+
+  async function renderFavoriteListInline(container, listId, fallbackName) {
+    const title = container.querySelector("[data-favorites-page-title]");
+    const loading = container.querySelector("[data-favorites-page-loading]");
+    const empty = container.querySelector("[data-favorites-page-empty]");
+    const gallery = container.querySelector("[data-favorites-page-gallery]");
+    if (!title || !loading || !empty || !gallery) return;
+
+    syncFavoriteListSelection(listId);
+    container.hidden = false;
+    title.textContent = `Favoritos: ${fallbackName}`;
+    loading.hidden = false;
+    empty.hidden = true;
+    gallery.innerHTML = "";
+
+    const response = await fetch(`/api/content/favorite-lists/${encodeURIComponent(listId)}`, {
+      headers: { "X-Requested-With": "fetch" }
+    });
+    const result = await response.json().catch(() => ({}));
+    loading.hidden = true;
+
+    if (!response.ok) {
+      title.textContent = fallbackName;
+      empty.innerHTML = `<h2>No se pudo abrir la lista</h2><p>${escapeHtml(result?.message || "Intenta nuevamente.")}</p>`;
+      empty.hidden = false;
+      return;
+    }
+
+    const items = Array.isArray(result?.items) ? result.items : [];
+    title.textContent = `Favoritos: ${result?.list?.name || fallbackName}`;
+
+    if (!items.length) {
+      empty.innerHTML = `<h2>La lista esta vacia</h2><p>Guarda publicaciones con la estrella para verlas aca.</p>`;
+      empty.hidden = false;
+      return;
+    }
+
+    gallery.innerHTML = items.map(item => buildGalleryCard(item, false, { showReportButton: false })).join("");
+    wireGalleryCards();
+    wireFavoriteActions(gallery);
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function syncFavoriteListSelection(activeListId) {
+    document.querySelectorAll("[data-favorite-list-open='true'][data-list-id]").forEach(button => {
+      const isActive = String(button.getAttribute("data-list-id")) === String(activeListId);
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
   }
 
   async function refreshFavoriteSummaries() {

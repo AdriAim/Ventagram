@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -19,6 +21,7 @@ public class ContentController(
     FavoriteService favoriteService,
     CloudflareR2ImageStorageService imageStorageService,
     CurrentUserAccessor currentUserAccessor,
+    NavigationLocalityService navigationLocalityService,
     VentagramDbContext db,
     ILogger<ContentController> logger,
     IConfiguration configuration) : Controller
@@ -28,17 +31,17 @@ public class ContentController(
     [HttpGet("home")]
     public async Task<IActionResult> Home([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        var currentUser = await LoadCurrentUserAsync();
         var selectedGroup = ParseGroupFilter(group);
         var selectedGroupName = selectedGroup?.ToDisplayName() ?? "Todos";
-        var selectedMode = string.IsNullOrWhiteSpace(mode) ? "Galeria" : mode;
+        var selectedMode = NormalizeBrowseMode(mode);
         var safePageSize = NormalizeTextPageSize(pageSize);
         var safePage = Math.Max(1, page);
         var publications = new List<Publication>();
         var totalResults = 0;
-        var userLocalityLabel = currentUser?.ArgentineLocality?.Locality;
-        var userLocalityLatitude = currentUser?.ArgentineLocality?.Latitude;
-        var userLocalityLongitude = currentUser?.ArgentineLocality?.Longitude;
+        var effectiveLocality = await navigationLocalityService.GetEffectiveLocalityAsync(HttpContext);
+        var userLocalityLabel = effectiveLocality?.DisplayLabel;
+        var userLocalityLatitude = effectiveLocality?.Latitude;
+        var userLocalityLongitude = effectiveLocality?.Longitude;
         var favoritePublicationIds = new HashSet<int>();
         var favoriteLists = new List<FavoriteListSummaryViewModel>();
 
@@ -118,17 +121,17 @@ public class ContentController(
     [HttpGet("browse")]
     public async Task<IActionResult> Browse([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        var currentUser = await LoadCurrentUserAsync();
         var selectedGroup = ParseGroupFilter(group);
         var selectedGroupName = selectedGroup?.ToDisplayName() ?? "Todos";
-        var selectedMode = string.IsNullOrWhiteSpace(mode) ? "Galeria" : mode;
+        var selectedMode = NormalizeBrowseMode(mode);
         var safePageSize = NormalizeTextPageSize(pageSize);
         var safePage = Math.Max(1, page);
         var publications = new List<Publication>();
         var totalResults = 0;
-        var userLocalityLabel = currentUser?.ArgentineLocality?.Locality;
-        var userLocalityLatitude = currentUser?.ArgentineLocality?.Latitude;
-        var userLocalityLongitude = currentUser?.ArgentineLocality?.Longitude;
+        var effectiveLocality = await navigationLocalityService.GetEffectiveLocalityAsync(HttpContext);
+        var userLocalityLabel = effectiveLocality?.DisplayLabel;
+        var userLocalityLatitude = effectiveLocality?.Latitude;
+        var userLocalityLongitude = effectiveLocality?.Longitude;
         var favoritePublicationIds = new HashSet<int>();
         var favoriteLists = new List<FavoriteListSummaryViewModel>();
 
@@ -208,7 +211,7 @@ public class ContentController(
     [HttpGet("gallery-items")]
     public async Task<IActionResult> GalleryItems([FromQuery] string? group = "Inmuebles", [FromQuery] string? query = null, [FromQuery] int offset = 0, [FromQuery] int limit = 20)
     {
-        var currentUser = await LoadCurrentUserAsync();
+        var effectiveLocality = await navigationLocalityService.GetEffectiveLocalityAsync(HttpContext);
         var selectedGroup = ParseGroupFilter(group);
         var safeOffset = Math.Max(0, offset);
         var safeLimit = Math.Clamp(limit, 1, 60);
@@ -217,8 +220,8 @@ public class ContentController(
             query,
             safeOffset,
             safeLimit + 1,
-            currentUser?.ArgentineLocality?.Latitude,
-            currentUser?.ArgentineLocality?.Longitude);
+            effectiveLocality?.Latitude,
+            effectiveLocality?.Longitude);
         var hasMore = items.Count > safeLimit;
         var payloadItems = items.Take(safeLimit).ToList();
         var favoritePublicationIds = currentUserAccessor.UserId is int currentUserId
@@ -683,6 +686,37 @@ public class ContentController(
             100 => 100,
             200 => 200,
             _ => 50
+        };
+    }
+
+    private static string NormalizeBrowseMode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Galeria";
+        }
+
+        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var buffer = new char[normalized.Length];
+        var length = 0;
+
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            buffer[length++] = char.ToLowerInvariant(character);
+        }
+
+        var compactValue = new string(buffer, 0, length);
+        return compactValue switch
+        {
+            "mapa" => "Mapa",
+            "texto" => "Texto",
+            "galeria" => "Galeria",
+            _ => "Galeria"
         };
     }
 
