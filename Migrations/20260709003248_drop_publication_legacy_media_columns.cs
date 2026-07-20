@@ -13,11 +13,41 @@ namespace Ventagram.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-                ALTER TABLE Publications DROP COLUMN IF EXISTS ImagesCsv;
+                SET @sql = (
+                    SELECT IF(
+                        EXISTS (
+                            SELECT 1
+                            FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = DATABASE()
+                              AND TABLE_NAME = 'Publications'
+                              AND COLUMN_NAME = 'ImagesCsv'
+                        ),
+                        'ALTER TABLE Publications DROP COLUMN ImagesCsv',
+                        'SELECT 1'
+                    )
+                );
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
                 """);
 
             migrationBuilder.Sql("""
-                ALTER TABLE Publications DROP COLUMN IF EXISTS VideoUrl;
+                SET @sql = (
+                    SELECT IF(
+                        EXISTS (
+                            SELECT 1
+                            FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = DATABASE()
+                              AND TABLE_NAME = 'Publications'
+                              AND COLUMN_NAME = 'VideoUrl'
+                        ),
+                        'ALTER TABLE Publications DROP COLUMN VideoUrl',
+                        'SELECT 1'
+                    )
+                );
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
                 """);
         }
 

@@ -1,0 +1,102 @@
+@inject IConfiguration Configuration
+@{
+    var publicationBaseUrl = (Configuration["Chat:PublicationBaseUrl"] ?? string.Empty).TrimEnd('/');
+    if (publicationBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
+    {
+        publicationBaseUrl = string.Empty;
+    }
+
+    var publicChatBaseUrl = (Configuration["Chat:PublicBaseUrl"] ?? string.Empty).TrimEnd('/');
+    if (publicChatBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
+    {
+        publicChatBaseUrl = string.Empty;
+    }
+
+    var homeUrl = string.IsNullOrWhiteSpace(publicationBaseUrl) ? "/" : $"{publicationBaseUrl}/";
+    var exploreUrl = string.IsNullOrWhiteSpace(publicationBaseUrl) ? "/Buscar#search-panel" : $"{publicationBaseUrl}/Buscar#search-panel";
+    var publishUrl = string.IsNullOrWhiteSpace(publicationBaseUrl) ? "/Publications/Create" : $"{publicationBaseUrl}/Publications/Create";
+    var favoritesUrl = string.IsNullOrWhiteSpace(publicationBaseUrl) ? "/Favoritos" : $"{publicationBaseUrl}/Favoritos";
+    var loginUrl = string.IsNullOrWhiteSpace(publicationBaseUrl) ? "/Account/Login" : $"{publicationBaseUrl}/Account/Login";
+    var registerUrl = string.IsNullOrWhiteSpace(publicationBaseUrl) ? "/Account/Register" : $"{publicationBaseUrl}/Account/Register";
+    var mailboxUrl = string.IsNullOrWhiteSpace(publicChatBaseUrl) ? "/Mensajes" : $"{publicChatBaseUrl}/Mensajes";
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] ?? "Chat") - Ventagram</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body data-user-authenticated="@((User.Identity?.IsAuthenticated ?? false) ? "true" : "false")">
+    <div class="page-backdrop"></div>
+
+    <header class="site-header">
+        <nav class="site-nav site-nav-chat">
+            <a class="brand-lockup" href="@homeUrl">
+                <img class="brand-mark" src="~/images/logo5.png" alt="Ventagram" />
+                <span class="brand-text">
+                    <strong>Ventagram</strong>
+                    <small>Comunidad y Anuncios</small>
+                </span>
+            </a>
+
+            <div class="site-nav-center site-nav-center-chat">
+                <div class="chat-nav-heading">
+                    <span class="eyebrow">Centro de mensajes</span>
+                    <h1>Bandeja integrada</h1>
+                </div>
+                <div class="nav-links nav-links-chat">
+                    <a class="nav-main-link" href="@exploreUrl">Explorar</a>
+                    <a class="nav-main-link" href="@publishUrl">Publicar</a>
+                    <a class="nav-main-link" href="@favoritesUrl">Favoritos</a>
+                    <a class="mailbox-button is-active" href="@mailboxUrl" aria-current="page">Mensajes</a>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                @if (User.Identity?.IsAuthenticated ?? false)
+                {
+                    <a class="ghost-pill compact" href="@homeUrl">Volver al sitio</a>
+                    <span class="user-badge">@User.Identity!.Name</span>
+                }
+                else
+                {
+                    <a class="ghost-pill compact" href="@loginUrl">Ingresar</a>
+                    <a class="primary-pill compact" href="@registerUrl">Crear cuenta</a>
+                }
+            </div>
+        </nav>
+    </header>
+
+    <main class="page-shell page-shell-chat">
+        @RenderBody()
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-brand">
+            <img class="footer-mark" src="~/images/logo5.png" alt="Ventagram" />
+            <div>
+                <strong>Ventagram</strong>
+                <p>La misma bandeja de mensajes, ahora servida desde un proyecto separado.</p>
+            </div>
+        </div>
+        <div class="footer-links">
+            <a href="@homeUrl">Inicio</a>
+            <a href="@exploreUrl">Explorar</a>
+            <a href="@publishUrl">Publicar</a>
+            <a href="@mailboxUrl">Mensajes</a>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="~/js/chat.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

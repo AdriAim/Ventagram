@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <DefaultItemExcludes>$(DefaultItemExcludes);_buildcheck*/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);_buildcheck*/**;artifacts/**;Ventagram.ChatService/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

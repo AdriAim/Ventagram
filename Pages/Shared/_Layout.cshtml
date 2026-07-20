@@ -1,5 +1,6 @@
 @using Ventagram.Services
 @inject NavigationLocalityService NavigationLocalityService
+@inject IConfiguration Configuration
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -13,7 +14,7 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
+<body data-user-authenticated="@((User.Identity?.IsAuthenticated ?? false) ? "true" : "false")">
     <div class="page-backdrop"></div>
     @{
         var headerGroup = Context.Request.Query["group"].ToString();
@@ -23,6 +24,14 @@
         var navigationLocality = await NavigationLocalityService.GetEffectiveLocalityAsync(Context);
         var availableHeaderLocalities = await NavigationLocalityService.GetAvailableLocalitiesAsync();
         var currentHeaderLocality = navigationLocality?.DisplayLabel ?? string.Empty;
+        var chatBaseUrl = (Configuration["Chat:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        if (chatBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
+        {
+            chatBaseUrl = string.Empty;
+        }
+        var chatMailboxUrl = string.IsNullOrWhiteSpace(chatBaseUrl)
+            ? "/Mensajes"
+            : $"{chatBaseUrl}/Mensajes";
     }
     <header class="site-header">
         <nav class="site-nav">
@@ -106,6 +115,15 @@
             <div class="nav-actions">
                 @if (User.Identity?.IsAuthenticated ?? false)
                 {
+                    <a class="mailbox-button"
+                       href="@chatMailboxUrl"
+                       data-chat-mailbox-button
+                       data-chat-unread-state="0"
+                       aria-label="Mensajes"
+                       title="Mensajes">
+                        <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                        <span class="mailbox-count" data-chat-unread-count hidden>0</span>
+                    </a>
                     <details class="user-menu">
                         <summary class="user-menu-toggle">
                             <span class="user-badge">@User.Identity!.Name</span>
@@ -183,6 +201,12 @@
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/typeahead/typeahead.bundle.min.js"></script>
+    <script>
+        window.__VENTAGRAM_CHAT_CONFIG = {
+            baseUrl: "@chatBaseUrl"
+        };
+    </script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

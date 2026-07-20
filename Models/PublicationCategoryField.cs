@@ -19,12 +19,16 @@ public class PublicationCategoryField
     public bool Required { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool ShowInBasicData { get; set; }
 
     [StringLength(24)]
     public string? Unit { get; set; }
 
     [StringLength(1000)]
     public string? OptionsCsv { get; set; }
+
+    [StringLength(180)]
+    public string? InputExample { get; set; }
 
     public List<PublicationFieldValue> Values { get; set; } = [];
 }

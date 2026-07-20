@@ -20,10 +20,12 @@ public class CategoriasController(PublicationCategoryFieldService publicationCat
             tipoDato = x.DataType.ToString().ToLowerInvariant(),
             obligatorio = x.Required,
             orden = x.SortOrder,
+            mostrarEnDatosMinimos = x.ShowInBasicData,
             unidad = x.Unit,
+            ejemplo = x.InputExample,
             opciones = string.IsNullOrWhiteSpace(x.OptionsCsv)
                 ? Array.Empty<string>()
-                : x.OptionsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : x.OptionsCsv.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         }));
     }
 }

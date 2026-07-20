@@ -13,6 +13,12 @@ else
     var publication = Model.Publication;
     var displayTitle = publication.Title.Split(" - oportunidad", StringSplitOptions.TrimEntries)[0];
     var owner = publication.User;
+    var canStartChat = Model.IsAuthenticated
+        && Model.CurrentUserId.HasValue
+        && publication.UserId.HasValue
+        && publication.UserId.Value != Model.CurrentUserId.Value
+        && !publication.IsAnonymous
+        && publication.IsActive;
     var canEmail = owner?.RespondsEmails == true || (owner is null && !string.IsNullOrWhiteSpace(publication.ContactEmail));
     var canCall = owner?.AcceptsCalls == true || (owner is null && !string.IsNullOrWhiteSpace(publication.ContactPhone));
     var canWhatsApp = owner?.RespondsWhatsApp == true || (owner is null && !string.IsNullOrWhiteSpace(publication.ContactPhone));
@@ -79,6 +85,25 @@ else
         <article class="detail-panel detail-contact-panel">
             <h2>Contacto</h2>
             <p><strong>@publication.ContactName</strong></p>
+            @if (canStartChat)
+            {
+                <p>
+                    <button type="button"
+                            class="primary-pill detail-chat-trigger"
+                            data-start-chat="true"
+                            data-publication-id="@publication.Id">
+                        Chatear por este anuncio
+                    </button>
+                </p>
+            }
+            else if (!Model.IsAuthenticated && publication.UserId.HasValue && !publication.IsAnonymous)
+            {
+                <p>
+                    <a class="primary-pill" href="/Account/Login?returnUrl=@Uri.EscapeDataString($"/Publications/Details/{publication.Id}")">
+                        Ingresar para chatear
+                    </a>
+                </p>
+            }
             @if (canEmail && !string.IsNullOrWhiteSpace(contactEmail))
             {
                 <p>

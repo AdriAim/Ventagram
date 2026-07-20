@@ -18,7 +18,7 @@
 
     [data-map-layout] .map-canvas {
         width: 100%;
-        min-height: 360px;
+        min-height: 420px;
     }
 }
 

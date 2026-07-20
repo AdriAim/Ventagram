@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Ventagram.Data;
@@ -13,6 +14,7 @@ var configuredUrls = builder.Configuration["urls"]
 var hasHttpsUrlConfigured = configuredUrls
     .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
     .Any(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+var sharedApplicationName = builder.Configuration["Authentication:SharedApplicationName"] ?? "Ventagram";
 
 builder.Services.AddRazorPages();
 builder.Services.AddControllersWithViews();
@@ -26,6 +28,8 @@ builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
+        options.Cookie.Name = builder.Configuration["Authentication:CookieName"] ?? ".Ventagram.Auth";
+        options.Cookie.Domain = builder.Configuration["Authentication:CookieDomain"];
         options.LoginPath = "/Account/Login";
         options.LogoutPath = "/Account/Logout";
     });
@@ -95,7 +99,13 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 }
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddDataProtection();
+var dataProtectionBuilder = builder.Services.AddDataProtection()
+    .SetApplicationName(sharedApplicationName);
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddSingleton<CloudflareR2ImageStorageService>();
 builder.Services.AddScoped<AuthService>();

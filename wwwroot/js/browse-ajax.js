@@ -2,6 +2,7 @@
   const SEARCH_PATH = "/Buscar";
   let browseRequest = null;
   let mapHeightObserver = null;
+  let mapHeightResizeHandler = null;
 
   document.addEventListener("DOMContentLoaded", () => {
     bindBrowseAjax();
@@ -158,6 +159,10 @@
   function setupMapHeightSync() {
     mapHeightObserver?.disconnect?.();
     mapHeightObserver = null;
+    if (mapHeightResizeHandler) {
+      window.removeEventListener("resize", mapHeightResizeHandler);
+      mapHeightResizeHandler = null;
+    }
 
     const layout = document.querySelector("[data-map-layout]");
     const mapCanvas = layout?.querySelector("#map");
@@ -168,20 +173,35 @@
 
     const sync = () => {
       if (window.matchMedia("(max-width: 780px)").matches) {
+        layout.style.removeProperty("--map-desktop-shared-height");
         mapCanvas.style.height = "";
         mapCanvas.style.minHeight = "";
+        mapCanvas.style.maxHeight = "";
+        panel.style.height = "";
+        panel.style.maxHeight = "";
+        panel.style.minHeight = "";
         resizeMap();
         return;
       }
 
-      const reference = card && card.children.length > 0 ? panel : layout;
-      const referenceHeight = Math.max(
-        360,
-        Math.ceil(reference.getBoundingClientRect().height)
+      const contentHeight = Math.max(
+        420,
+        Math.ceil(panel.scrollHeight),
+        Math.ceil(card?.scrollHeight || 0)
       );
+      const viewportMax = Math.max(
+        420,
+        Math.floor(window.innerHeight - 96)
+      );
+      const sharedHeight = Math.min(contentHeight, viewportMax, 720);
 
-      mapCanvas.style.height = `${referenceHeight}px`;
-      mapCanvas.style.minHeight = `${referenceHeight}px`;
+      layout.style.setProperty("--map-desktop-shared-height", `${sharedHeight}px`);
+      mapCanvas.style.height = `${sharedHeight}px`;
+      mapCanvas.style.minHeight = `${sharedHeight}px`;
+      mapCanvas.style.maxHeight = `${sharedHeight}px`;
+      panel.style.height = `${sharedHeight}px`;
+      panel.style.minHeight = `${sharedHeight}px`;
+      panel.style.maxHeight = `${sharedHeight}px`;
       resizeMap();
     };
 
@@ -191,6 +211,9 @@
     if (card) {
       mapHeightObserver.observe(card);
     }
+
+    mapHeightResizeHandler = () => sync();
+    window.addEventListener("resize", mapHeightResizeHandler);
 
     window.requestAnimationFrame(sync);
     window.setTimeout(sync, 100);

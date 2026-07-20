@@ -173,5 +173,6 @@ public class VentagramDbContext(DbContextOptions<VentagramDbContext> options) : 
         modelBuilder.Entity<FavoriteListItem>()
             .HasIndex(x => new { x.FavoriteListId, x.PublicationId })
             .IsUnique();
+
     }
 }

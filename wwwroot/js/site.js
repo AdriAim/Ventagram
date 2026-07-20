@@ -2,10 +2,13 @@
   let ventagramFlashMessage = "";
   let maptilerSdkPromise = null;
   let openPublicationPreview = null;
+  let mapSelectionLayoutObserver = null;
+  let mapSelectionLayoutResizeHandler = null;
   const favoriteLastListStorageKey = "ventagram:last-favorite-list-id";
   const likedPublicationsStorageKey = "ventagram:liked-publications";
   const NAVIGATION_LOCALITY_COOKIE = "ventagram_nav_locality_id";
   const maptilerKeyHealth = new Map();
+  const chatConfig = window.__VENTAGRAM_CHAT_CONFIG || {};
 
   document.addEventListener("DOMContentLoaded", async () => {
     wirePhoneMasks(document);
@@ -20,6 +23,7 @@
     wireFavoriteListModal();
     wireFavoriteActions(document);
     initFavoritesPage();
+    await initRealtimeChat();
     await loadApiPage();
   });
 
@@ -54,7 +58,80 @@
     wireFavoriteActions(host);
     wireReportForm();
     wireCreateForm();
+    wireChatExperience(host);
+    setupMapSelectionLayoutSync(host);
     scrollToSearchPanelIfRequested();
+  }
+
+  function setupMapSelectionLayoutSync(root = document) {
+    mapSelectionLayoutObserver?.disconnect?.();
+    mapSelectionLayoutObserver = null;
+
+    if (mapSelectionLayoutResizeHandler) {
+      window.removeEventListener("resize", mapSelectionLayoutResizeHandler);
+      mapSelectionLayoutResizeHandler = null;
+    }
+
+    const layout = root.querySelector?.("[data-map-layout]");
+    const mapCanvas = layout?.querySelector(".map-canvas");
+    const panel = layout?.querySelector("[data-map-selection-panel]");
+    const card = layout?.querySelector("[data-map-selection-card]");
+
+    if (!layout || !mapCanvas || !panel) return;
+
+    const sync = () => {
+      if (window.matchMedia("(max-width: 780px)").matches) {
+        layout.style.removeProperty("--map-desktop-shared-height");
+        mapCanvas.style.height = "";
+        mapCanvas.style.minHeight = "";
+        mapCanvas.style.maxHeight = "";
+        panel.style.height = "";
+        panel.style.minHeight = "";
+        panel.style.maxHeight = "";
+        return;
+      }
+
+      const contentHeight = Math.max(
+        420,
+        Math.ceil(panel.scrollHeight),
+        Math.ceil(card?.scrollHeight || 0)
+      );
+      const viewportMax = Math.max(
+        420,
+        Math.floor(window.innerHeight - 96)
+      );
+      const sharedHeight = Math.min(contentHeight, viewportMax, 720);
+
+      layout.style.setProperty("--map-desktop-shared-height", `${sharedHeight}px`);
+      mapCanvas.style.height = `${sharedHeight}px`;
+      mapCanvas.style.minHeight = `${sharedHeight}px`;
+      mapCanvas.style.maxHeight = `${sharedHeight}px`;
+      panel.style.height = `${sharedHeight}px`;
+      panel.style.minHeight = `${sharedHeight}px`;
+      panel.style.maxHeight = `${sharedHeight}px`;
+
+      const mapInstance =
+        mapCanvas?._map ||
+        mapCanvas?.map ||
+        window.map ||
+        window.contentMap;
+
+      mapInstance?.resize?.();
+    };
+
+    mapSelectionLayoutObserver = new ResizeObserver(sync);
+    mapSelectionLayoutObserver.observe(panel);
+
+    if (card) {
+      mapSelectionLayoutObserver.observe(card);
+    }
+
+    mapSelectionLayoutResizeHandler = () => sync();
+    window.addEventListener("resize", mapSelectionLayoutResizeHandler);
+
+    window.requestAnimationFrame(sync);
+    window.setTimeout(sync, 100);
+    window.setTimeout(sync, 400);
   }
 
   function scrollToSearchPanelIfRequested() {
@@ -2065,12 +2142,14 @@
     categorySelect?.addEventListener("change", async () => {
       categorySelect.dataset.selectedCategoryId = categorySelect.value || "";
       await reloadDynamicCategoryFields(form);
+      enhanceSearchableSelects(form);
       syncCreateTitle(form);
     });
 
     groupInput?.addEventListener("change", async () => {
       await reloadCategoryOptions(form);
       await reloadDynamicCategoryFields(form);
+      enhanceSearchableSelects(form);
       syncCreateTitle(form);
     });
 
@@ -2131,7 +2210,8 @@
     });
 
     reloadCategoryOptions(form, true)
-      .then(() => reloadDynamicCategoryFields(form));
+      .then(() => reloadDynamicCategoryFields(form))
+      .then(() => enhanceSearchableSelects(form));
   }
 
   function wireCreateSectionToggles(form) {
@@ -2200,21 +2280,22 @@
       .trim();
 
     const map = {
-      Group: "group",
-      CategoryId: "category",
-      Category: "category",
-      Price: "price",
-      Currency: "currency",
-      Locality: "locationSearch",
-      Latitude: "locationSearch",
-      Longitude: "locationSearch",
-      ShortDescription: "shortDescription",
-      LongDescription: "longDescription",
-      ImagesCsv: "imagesCsv",
-      VideoUrl: "videoUrl"
+      group: "group",
+      categoryid: "category",
+      category: "category",
+      price: "price",
+      currency: "currency",
+      locality: "locationSearch",
+      latitude: "locationSearch",
+      longitude: "locationSearch",
+      shortdescription: "shortDescription",
+      longdescription: "longDescription",
+      imagescsv: "imagesCsv",
+      videourl: "videoUrl"
     };
 
-    if (map[bare]) return map[bare];
+    const mapped = map[bare.toLowerCase()];
+    if (mapped) return mapped;
     if (bare.length === 1) return bare.toLowerCase();
 
     return bare[0].toLowerCase() + bare.slice(1);
@@ -2252,15 +2333,31 @@
   }
 
   function renderCreateFormErrors(form, errors) {
+    const groupedErrors = new Map();
     errors.forEach(({ field, message }) => {
+      if (!field || !message) return;
+      if (!groupedErrors.has(field)) {
+        groupedErrors.set(field, []);
+      }
+
+      const messages = groupedErrors.get(field);
+      if (!messages.includes(message)) {
+        messages.push(message);
+      }
+    });
+
+    groupedErrors.forEach((messages, field) => {
       const container = form.querySelector(`[data-field-container="${field}"]`);
       const errorNode = form.querySelector(`[data-field-error="${field}"]`);
       container?.classList.add("field-invalid");
       container?.querySelectorAll("input, select, textarea").forEach(node => {
         node.classList.add("input-invalid");
       });
+      container?.querySelectorAll(".searchable-select-input").forEach(node => {
+        node.classList.add("input-invalid");
+      });
       if (errorNode) {
-        errorNode.textContent = message;
+        errorNode.textContent = messages.join(" ");
       }
     });
   }
@@ -2274,7 +2371,10 @@
 
     container.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    const target = container.querySelector("input, select, textarea, button") || container;
+    const target =
+      container.querySelector(".searchable-select-input")
+      || container.querySelector("input, select, textarea, button")
+      || container;
     if (typeof target.focus === "function") {
       target.focus({ preventScroll: true });
     }
@@ -2288,8 +2388,9 @@
     const endpoint = categorySelect.dataset.categoryEndpoint;
     if (!endpoint) return;
 
+    const selectedCategoryId = String(categorySelect.dataset.selectedCategoryId || "").trim();
     const currentValue = preserveCurrentSelection
-      ? (categorySelect.dataset.selectedCategoryId || categorySelect.value || "").trim()
+      ? (selectedCategoryId && selectedCategoryId !== "0" ? selectedCategoryId : "")
       : (categorySelect.value || "").trim();
 
     const response = await fetch(`${endpoint}?group=${encodeURIComponent(groupInput.value)}`, {
@@ -2297,13 +2398,13 @@
     });
 
     if (!response.ok) {
-      categorySelect.innerHTML = `<option value="">No se pudieron cargar las categorÃ­as</option>`;
+      categorySelect.innerHTML = `<option value="">No se pudieron cargar las categorías</option>`;
       return;
     }
 
     const items = await response.json();
     const options = Array.isArray(items) ? items : [];
-    categorySelect.innerHTML = `<option value="">SeleccionÃ¡ una categorÃ­a</option>`;
+    categorySelect.innerHTML = `<option value="">Seleccioná una categoría</option>`;
 
     options.forEach(item => {
       const option = document.createElement("option");
@@ -2319,7 +2420,12 @@
       categorySelect.value = "";
     }
 
+    if (!String(categorySelect.value || "").trim() && categorySelect.options.length > 0) {
+      categorySelect.selectedIndex = 0;
+    }
+
     categorySelect.dataset.selectedCategoryId = categorySelect.value || "";
+    enhanceSearchableSelects(form);
   }
 
   async function reloadDynamicCategoryFields(form) {
@@ -2329,6 +2435,7 @@
     const requiredEmptyNode = form.querySelector("[data-dynamic-required-fields-empty]");
     const optionalEmptyNode = form.querySelector("[data-dynamic-optional-fields-empty]");
     const technicalPanel = form.querySelector("[data-technical-panel]");
+    const shouldKeepTechnicalPanelVisible = () => (categorySelect.options?.length || 0) > 1;
     if (!categorySelect || !requiredContainer || !optionalContainer) return;
 
     const previousValues = new Map([
@@ -2342,13 +2449,15 @@
       requiredContainer.querySelectorAll("[data-dynamic-field]").forEach(node => node.remove());
       optionalContainer.querySelectorAll("[data-dynamic-field]").forEach(node => node.remove());
       if (technicalPanel) {
-        technicalPanel.hidden = true;
+        technicalPanel.hidden = !shouldKeepTechnicalPanelVisible();
       }
       if (requiredEmptyNode) {
         requiredEmptyNode.hidden = false;
+        requiredEmptyNode.textContent = "Seleccioná una categoría para completar los datos mínimos adicionales.";
       }
       if (optionalEmptyNode) {
         optionalEmptyNode.hidden = false;
+        optionalEmptyNode.textContent = "Seleccioná una categoría para cargar la ficha técnica opcional.";
       }
       return;
     }
@@ -2363,13 +2472,15 @@
 
     if (!response.ok) {
       if (technicalPanel) {
-        technicalPanel.hidden = true;
+        technicalPanel.hidden = false;
       }
       if (requiredEmptyNode) {
         requiredEmptyNode.hidden = false;
+        requiredEmptyNode.textContent = "No se pudieron cargar los campos adicionales de esta categoría.";
       }
       if (optionalEmptyNode) {
         optionalEmptyNode.hidden = false;
+        optionalEmptyNode.textContent = "No se pudo cargar la ficha técnica de esta categoría.";
       }
       return;
     }
@@ -2378,19 +2489,21 @@
     const fields = Array.isArray(payload) ? payload : [];
     if (!fields.length) {
       if (technicalPanel) {
-        technicalPanel.hidden = true;
+        technicalPanel.hidden = false;
       }
       if (requiredEmptyNode) {
         requiredEmptyNode.hidden = false;
+        requiredEmptyNode.textContent = "Esta categoría no tiene campos adicionales configurados.";
       }
       if (optionalEmptyNode) {
         optionalEmptyNode.hidden = false;
+        optionalEmptyNode.textContent = "Esta categoría no tiene ficha técnica opcional.";
       }
       return;
     }
 
-    const requiredFields = fields.filter(field => field.obligatorio);
-    const optionalFields = fields.filter(field => !field.obligatorio);
+    const requiredFields = fields.filter(field => field.mostrarEnDatosMinimos ?? field.obligatorio);
+    const optionalFields = fields.filter(field => !(field.mostrarEnDatosMinimos ?? field.obligatorio));
 
     if (technicalPanel) {
       technicalPanel.hidden = optionalFields.length === 0;
@@ -2398,15 +2511,15 @@
 
     if (requiredEmptyNode) {
       requiredEmptyNode.hidden = requiredFields.length > 0;
-      if (!requiredFields.length) {
-        requiredEmptyNode.textContent = "Esta categoria no tiene campos obligatorios adicionales.";
-      }
+        if (!requiredFields.length) {
+          requiredEmptyNode.textContent = "Esta categoría no tiene campos adicionales en datos mínimos.";
+        }
     }
 
     if (optionalEmptyNode) {
       optionalEmptyNode.hidden = optionalFields.length > 0;
       if (!optionalFields.length) {
-        optionalEmptyNode.textContent = "Esta categoria no tiene ficha tecnica opcional.";
+        optionalEmptyNode.textContent = "Esta categoría no tiene ficha técnica opcional.";
       }
     }
 
@@ -2414,8 +2527,223 @@
       requiredContainer.appendChild(buildDynamicFieldNode(field, previousValues.get(field.nombreInterno), "required"));
     });
 
-    optionalFields.forEach(field => {
+    optionalFields
+      .slice()
+      .sort(compareOptionalDynamicFields)
+      .forEach(field => {
       optionalContainer.appendChild(buildDynamicFieldNode(field, previousValues.get(field.nombreInterno), "optional"));
+      });
+
+    enhanceSearchableSelects(form);
+  }
+
+  function enhanceSearchableSelects(root = document) {
+    root.querySelectorAll("[data-searchable-select-root]").forEach(wrapper => {
+      const input = wrapper.querySelector(".searchable-select-input");
+      if (input && typeof window.jQuery === "function" && typeof window.jQuery(input).typeahead === "function") {
+        window.jQuery(input).typeahead("destroy");
+      }
+      const select = wrapper.querySelector("select");
+      if (select) {
+        wrapper.parentNode?.insertBefore(select, wrapper);
+      }
+      wrapper.remove();
+    });
+    root.querySelectorAll(".searchable-select-native").forEach(select => {
+      select.classList.remove("searchable-select-native");
+    });
+
+    root.querySelectorAll("select").forEach(select => {
+      if (select.multiple || select.disabled) return;
+
+      let options = Array.from(select.options || []);
+      const searchableOptions = options.filter(option => String(option.value || "").trim() !== "");
+      if (searchableOptions.length <= 10) return;
+
+      const hasEmptyOption = options.some(option => String(option.value || "").trim() === "");
+      if (!hasEmptyOption && !String(select.dataset.selectedCategoryId || select.value || "").trim()) {
+        const emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        emptyOption.textContent = "Debe seleccionar";
+        emptyOption.selected = true;
+        select.insertBefore(emptyOption, select.firstChild);
+        options = Array.from(select.options || []);
+      }
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "searchable-select";
+      wrapper.dataset.searchableSelectRoot = "true";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "searchable-select-input";
+      input.placeholder = options[0]?.textContent?.trim() || "Buscar y seleccionar";
+
+      const typeaheadItems = searchableOptions.map(option => ({
+        value: String(option.value || ""),
+        label: String(option.textContent || "").trim()
+      }));
+      const emptyOptionLabel = select.options[0]?.textContent?.trim() || "Debe seleccionar";
+
+      const syncInputFromSelect = () => {
+        const selectedOption = select.selectedOptions?.[0];
+        const selectedValue = String(selectedOption?.value || select.value || "").trim();
+        input.value = selectedValue.length > 0
+          ? (selectedOption?.textContent?.trim() || "")
+          : "";
+        input.placeholder = emptyOptionLabel;
+      };
+
+      const openAllOptions = () => {
+        if (typeof window.jQuery !== "function" || typeof window.jQuery(input).typeahead !== "function") return;
+        const $input = window.jQuery(input);
+        $input.typeahead("val", "");
+        input.value = "";
+        $input.typeahead("open");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+
+      const resetToSelectableState = () => {
+        select.value = "";
+        input.value = "";
+        input.placeholder = emptyOptionLabel;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+
+      const syncSearchableSelectErrorState = (showMessage = false) => {
+        const container = select.closest("[data-field-container]");
+        if (!container) return;
+        const errorNode = container.querySelector(`[data-field-error="${select.dataset.internalName || container.getAttribute("data-field-container") || ""}"]`);
+        const isRequired = select.getAttribute("aria-required") === "true" || select.name === "category";
+        const hasValue = String(select.value || "").trim().length > 0;
+
+        input.classList.toggle("input-invalid", isRequired && !hasValue);
+        if (!isRequired || hasValue) {
+          if (errorNode && errorNode.textContent === "Debe seleccionar una opción.") {
+            errorNode.textContent = "";
+          }
+          if (!container.querySelector(".field-error:not(:empty)")) {
+            container.classList.remove("field-invalid");
+          }
+          return;
+        }
+
+        if (!showMessage && !container.classList.contains("field-invalid")) {
+          input.classList.remove("input-invalid");
+          return;
+        }
+
+        container.classList.add("field-invalid");
+        if (errorNode && !errorNode.textContent.trim()) {
+          errorNode.textContent = "Debe seleccionar una opción.";
+        }
+      };
+
+      const syncSelectFromInput = () => {
+        const raw = String(input.value || "").trim();
+        if (!raw) {
+          select.value = "";
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          return;
+        }
+
+        const match = typeaheadItems.find(option =>
+          option.label.localeCompare(raw, "es", { sensitivity: "base" }) === 0
+        );
+
+        if (!match) return;
+
+        if (select.value !== match.value) {
+          select.value = match.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      };
+
+      input.addEventListener("change", syncSelectFromInput);
+      input.addEventListener("blur", () => {
+        const raw = String(input.value || "").trim();
+        if (!raw) {
+          resetToSelectableState();
+          syncSearchableSelectErrorState(true);
+          return;
+        }
+
+        const match = typeaheadItems.find(option =>
+          option.label.localeCompare(raw, "es", { sensitivity: "base" }) === 0
+        );
+
+        if (!match) {
+          resetToSelectableState();
+          syncSearchableSelectErrorState(true);
+          return;
+        }
+
+        if (select.value !== match.value) {
+          select.value = match.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        syncInputFromSelect();
+        syncSearchableSelectErrorState();
+      });
+      select.addEventListener("change", () => {
+        syncInputFromSelect();
+        syncSearchableSelectErrorState();
+      });
+      syncInputFromSelect();
+      syncSearchableSelectErrorState();
+
+      select.classList.add("searchable-select-native");
+      select.parentNode?.insertBefore(wrapper, select);
+      wrapper.appendChild(input);
+      wrapper.appendChild(select);
+
+      if (typeof window.jQuery === "function" && typeof window.jQuery(input).typeahead === "function") {
+        const $input = window.jQuery(input);
+        $input.typeahead(
+          {
+            hint: false,
+            highlight: false,
+            minLength: 0
+          },
+          {
+            name: `searchable-select-${createClientId()}`,
+            display: "label",
+            limit: 50,
+            source(query, syncResults) {
+              const normalizedQuery = String(query || "").trim().toLocaleLowerCase("es");
+              const results = normalizedQuery.length === 0
+                ? typeaheadItems
+                : typeaheadItems.filter(item => item.label.toLocaleLowerCase("es").includes(normalizedQuery));
+              syncResults(results);
+            }
+          }
+        );
+
+        $input.on("typeahead:select typeahead:autocomplete", (_, item) => {
+          if (!item?.value) return;
+          if (select.value !== item.value) {
+            select.value = item.value;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          syncInputFromSelect();
+        });
+
+        $input.on("focus click", () => {
+          window.setTimeout(openAllOptions, 0);
+        });
+
+        $input.on("input", () => {
+          $input.typeahead("open");
+        });
+
+        input.addEventListener("keydown", event => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            openAllOptions();
+          }
+        });
+      }
     });
   }
 
@@ -2444,45 +2772,76 @@
     wrapper.dataset.dynamicField = "true";
     wrapper.dataset.fieldContainer = field.nombreInterno || "";
     const isRequiredMode = mode === "required";
+    const options = Array.isArray(field.opciones) ? field.opciones.filter(option => String(option || "").trim().length > 0) : [];
+    const behavesAsSelect = options.length > 0;
+    const effectiveFieldType = behavesAsSelect ? "lista" : String(field.tipoDato || "texto");
+    const isHalfWidthOptional = !isRequiredMode && (effectiveFieldType === "numero" || effectiveFieldType === "booleano");
+    const optionalWidthClass = isRequiredMode
+      ? ""
+      : (isHalfWidthOptional ? "dynamic-field-half" : "dynamic-field-full");
+    const normalizedLabel = normalizeDynamicFieldLabel(
+      field.obligatorio
+        ? `${field.etiqueta} *`
+        : field.etiqueta || field.nombreInterno || "Campo"
+    );
+    const example = String(field.ejemplo || "").trim();
+
     wrapper.className = isRequiredMode
-      ? (field.tipoDato === "booleano" ? "checkline compact-check" : "")
-      : (field.tipoDato === "booleano" ? "checkline compact-check wide dynamic-field-inline" : "wide dynamic-field-inline");
+      ? ""
+      : (effectiveFieldType === "booleano"
+        ? `dynamic-field-inline ${optionalWidthClass}`.trim()
+        : `dynamic-field-inline ${optionalWidthClass}`.trim());
 
     const labelText = document.createElement("span");
-    labelText.textContent = field.obligatorio
-      ? `${field.etiqueta} *`
-      : field.etiqueta || field.nombreInterno || "Campo";
+    labelText.textContent = normalizedLabel;
 
     const error = document.createElement("span");
     error.className = "field-error";
     error.dataset.fieldError = field.nombreInterno || "";
 
     let input;
-    switch (field.tipoDato) {
+    switch (effectiveFieldType) {
       case "numero":
         input = document.createElement("input");
         input.type = "number";
-        input.step = "0.01";
+        input.step = "1";
         input.value = currentValue ?? "";
         break;
       case "booleano":
-        input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = Boolean(currentValue);
+        input = document.createElement("select");
+        {
+          const neutralOption = document.createElement("option");
+          neutralOption.value = "";
+          neutralOption.textContent = "Seleccionar";
+          input.appendChild(neutralOption);
+
+          const falseOption = document.createElement("option");
+          falseOption.value = "false";
+          falseOption.textContent = "No";
+          input.appendChild(falseOption);
+
+          const trueOption = document.createElement("option");
+          trueOption.value = "true";
+          trueOption.textContent = "Sí";
+          input.appendChild(trueOption);
+
+          input.value = String(currentValue) === "true"
+            ? "true"
+            : (String(currentValue) === "false" ? "false" : "");
+        }
         break;
       case "lista":
         input = document.createElement("select");
         {
           const placeholder = document.createElement("option");
           placeholder.value = "";
-          placeholder.textContent = "Selecciona una opcion";
+          placeholder.textContent = "Seleccioná una opción";
           input.appendChild(placeholder);
 
-          const options = Array.isArray(field.opciones) ? field.opciones : [];
           options.forEach(optionValue => {
             const option = document.createElement("option");
             option.value = String(optionValue || "");
-            option.textContent = String(optionValue || "");
+            option.textContent = normalizeDynamicFieldLabel(String(optionValue || ""));
             if (option.value === String(currentValue ?? "")) {
               option.selected = true;
             }
@@ -2499,7 +2858,7 @@
 
     input.dataset.dynamicInput = "true";
     input.dataset.fieldId = String(field.id || "");
-    input.dataset.fieldType = String(field.tipoDato || "texto");
+    input.dataset.fieldType = effectiveFieldType;
     input.dataset.internalName = String(field.nombreInterno || "");
     input.name = `dynamic_${field.nombreInterno || field.id || createClientId()}`;
 
@@ -2507,15 +2866,19 @@
       input.setAttribute("aria-required", "true");
     }
 
-    const unit = String(field.unidad || "").trim();
-    if (!isRequiredMode && field.tipoDato !== "booleano" && unit) {
+    if ((effectiveFieldType === "texto" || effectiveFieldType === "numero") && example) {
+      input.placeholder = normalizeDynamicFieldLabel(example);
+    }
+
+    const unit = normalizeDynamicFieldLabel(String(field.unidad || "").trim());
+    if (!isRequiredMode && effectiveFieldType !== "booleano" && unit && !behavesAsSelect) {
       const fieldRow = document.createElement("div");
       fieldRow.className = "field-input-with-unit";
       fieldRow.appendChild(input);
 
       const unitBadge = document.createElement("span");
       unitBadge.className = "field-unit";
-      unitBadge.textContent = unit;
+      unitBadge.textContent = `(${unit})`;
       fieldRow.appendChild(unitBadge);
 
       wrapper.appendChild(labelText);
@@ -2524,28 +2887,67 @@
       return wrapper;
     }
 
-    if (field.tipoDato === "booleano" && !isRequiredMode) {
-      const text = document.createElement("span");
-      text.textContent = field.obligatorio
-        ? `${field.etiqueta} *`
-        : field.etiqueta || field.nombreInterno || "Campo";
-      wrapper.appendChild(text);
-      wrapper.appendChild(input);
-      wrapper.appendChild(error);
-      return wrapper;
-    }
-
-    if (field.tipoDato === "booleano" && isRequiredMode) {
-      wrapper.appendChild(labelText);
-      wrapper.appendChild(input);
-      wrapper.appendChild(error);
-      return wrapper;
-    }
-
     wrapper.appendChild(labelText);
     wrapper.appendChild(input);
     wrapper.appendChild(error);
     return wrapper;
+  }
+
+  function compareOptionalDynamicFields(left, right) {
+    const typeDiff = getOptionalDynamicFieldOrder(left) - getOptionalDynamicFieldOrder(right);
+    if (typeDiff !== 0) {
+      return typeDiff;
+    }
+
+    const leftOrder = Number.isFinite(Number(left?.orden)) ? Number(left.orden) : Number.MAX_SAFE_INTEGER;
+    const rightOrder = Number.isFinite(Number(right?.orden)) ? Number(right.orden) : Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return String(left?.etiqueta || left?.nombreInterno || "")
+      .localeCompare(String(right?.etiqueta || right?.nombreInterno || ""), "es", { sensitivity: "base" });
+  }
+
+  function getOptionalDynamicFieldOrder(field) {
+    const options = Array.isArray(field?.opciones) ? field.opciones.filter(option => String(option || "").trim().length > 0) : [];
+    if (options.length > 0) {
+      return 0;
+    }
+
+    switch (String(field?.tipoDato || "").toLowerCase()) {
+      case "lista":
+        return 0;
+      case "numero":
+        return 1;
+      case "booleano":
+        return 2;
+      case "texto":
+        return 3;
+      default:
+        return 4;
+    }
+  }
+
+  function normalizeDynamicFieldLabel(value) {
+    return String(value || "")
+      .replace(/\bAntiguedad\b/gi, matchCase("Antigüedad"))
+      .replace(/\bBanios\b/gi, matchCase("Baños"))
+      .replace(/\bAnios\b/gi, matchCase("Años"));
+  }
+
+  function matchCase(replacement) {
+    return source => {
+      if (source === source.toUpperCase()) {
+        return replacement.toUpperCase();
+      }
+
+      if (source[0] === source[0]?.toUpperCase()) {
+        return replacement[0].toUpperCase() + replacement.slice(1);
+      }
+
+      return replacement.toLowerCase();
+    };
   }
 
   function wireCreateImageUploader(form) {
@@ -3382,6 +3784,124 @@
     playToggle.setAttribute("aria-label", showingVideo && !video.paused ? "Pausar video" : "Reproducir video");
   }
 
+  async function initRealtimeChat() {
+    if (document.body?.dataset.userAuthenticated !== "true") {
+      return;
+    }
+
+    await refreshChatUnreadCount();
+  }
+
+  async function refreshChatUnreadCount() {
+    if (document.body?.dataset.userAuthenticated !== "true") {
+      return;
+    }
+
+    const url = buildChatServiceUrl("/api/chat/unread-count");
+    if (!url) {
+      return;
+    }
+
+    try {
+      const response = await fetch(url, {
+        headers: { "X-Requested-With": "fetch" },
+        credentials: "include"
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      syncChatUnreadBadges(Number(payload?.unreadCount || 0));
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  function syncChatUnreadBadges(unreadCount) {
+    const safeCount = Math.max(0, Number(unreadCount || 0));
+    const unreadLabel = safeCount <= 0
+      ? "Mensajes"
+      : safeCount === 1
+        ? "1 mensaje sin leer"
+        : `${safeCount} mensajes sin leer`;
+
+    document.querySelectorAll("[data-chat-unread-count]").forEach(node => {
+      node.textContent = String(safeCount);
+      node.hidden = safeCount <= 0;
+    });
+
+    document.querySelectorAll("[data-chat-mailbox-button]").forEach(button => {
+      const state = safeCount <= 0
+        ? "0"
+        : safeCount <= 3
+          ? "1"
+          : safeCount <= 9
+            ? "2"
+            : "3";
+      button.dataset.chatUnreadState = state;
+      button.setAttribute("aria-label", unreadLabel);
+      button.setAttribute("title", unreadLabel);
+    });
+  }
+
+  function wireChatExperience(root = document) {
+    wireStartChatButtons(root);
+  }
+
+  function wireStartChatButtons(root = document) {
+    if (document.body.dataset.chatStartBound === "true") return;
+
+    document.body.dataset.chatStartBound = "true";
+    document.addEventListener("click", async event => {
+      const button = event.target.closest("[data-start-chat='true']");
+      if (!button) return;
+
+      const publicationId = Number(button.dataset.publicationId || 0);
+      if (publicationId <= 0) return;
+
+      event.preventDefault();
+      button.disabled = true;
+      try {
+        const url = buildChatServiceUrl("/api/chat/conversations");
+        if (!url) {
+          throw new Error("Configura la URL del servicio de chat.");
+        }
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "fetch"
+          },
+          body: JSON.stringify({ publicationId }),
+          credentials: "include"
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message || "No se pudo abrir el chat.");
+        }
+
+        window.location.href = payload.redirectUrl || buildChatServiceUrl("/Mensajes") || "/Mensajes";
+      } catch (error) {
+        window.alert(error.message || "No se pudo abrir el chat.");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
+  function buildChatServiceUrl(path) {
+    const baseUrl = String(chatConfig.baseUrl || "").trim().replace(/\/+$/, "");
+    if (!baseUrl) {
+      return "";
+    }
+
+    if (!path) {
+      return baseUrl;
+    }
+
+    return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  }
+
   function serializeCreateForm(form) {
     const value = name => form.querySelector(`[name="${name}"]`)?.value ?? "";
     const checked = name => Boolean(form.querySelector(`[name="${name}"]`)?.checked);
@@ -3393,7 +3913,9 @@
         const payload = { fieldId, valueText: null, valueNumber: null, valueBoolean: null };
 
         if (fieldType === "booleano") {
-          payload.valueBoolean = input.checked;
+          payload.valueBoolean = input.value === ""
+            ? null
+            : String(input.value).toLowerCase() === "true";
         } else if (fieldType === "numero") {
           payload.valueNumber = input.value === "" ? null : Number(input.value);
         } else {

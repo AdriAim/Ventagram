@@ -63,12 +63,12 @@
                     </label>
 
                     <label data-field-container="category">
-                        <span>Categoria</span>
+                        <span>Categoría</span>
                         <select name="category"
                                 data-category-select
                                 data-category-endpoint="/api/content/categories"
                                 data-selected-category-id="@Model.Input.CategoryId">
-                            <option value="">Selecciona una categoria</option>
+                            <option value="">Seleccioná una categoría</option>
                             @foreach (var category in Model.Categories)
                             {
                                 if (category.Id == Model.Input.CategoryId)
@@ -232,7 +232,7 @@
 
                 <div data-section-body="technical" hidden>
                     <div class="form-grid" data-dynamic-optional-fields-container data-category-fields-endpoint-template="/api/categorias/__CATEGORY_ID__/campos">
-                        <div class="wide field-hint" data-dynamic-optional-fields-empty hidden>Selecciona una categoria para cargar la ficha tecnica opcional.</div>
+                        <div class="wide field-hint" data-dynamic-optional-fields-empty hidden>Seleccioná una categoría para cargar la ficha técnica opcional.</div>
                     </div>
                 </div>
             </section>

@@ -328,7 +328,9 @@ public class ContentController(
         var model = new PublicationDetailsContentViewModel
         {
             Publication = await publicationService.GetByIdAsync(id),
-            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty
+            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            IsAuthenticated = currentUserAccessor.IsAuthenticated,
+            CurrentUserId = currentUserAccessor.UserId
         };
 
         return PartialView("~/Views/Content/Details.cshtml", model);
@@ -346,7 +348,7 @@ public class ContentController(
         var input = new PublicationCreateRequest
         {
             Group = defaultGroup,
-            CategoryId = categories.FirstOrDefault()?.Id ?? 0,
+            CategoryId = 0,
             Currency = "ARS",
             ContactName = user?.Name ?? string.Empty,
             ContactPhone = user?.Phone ?? string.Empty,

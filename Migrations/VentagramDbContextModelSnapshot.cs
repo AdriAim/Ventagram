@@ -82,7 +82,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.ArgentineLocality", b =>
@@ -120,7 +120,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("Province", "Locality")
                         .IsUnique();
 
-                    b.ToTable("ArgentineLocalities");
+                    b.ToTable("ArgentineLocalities", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.FavoriteList", b =>
@@ -150,7 +150,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("UserId", "Name")
                         .IsUnique();
 
-                    b.ToTable("FavoriteLists");
+                    b.ToTable("FavoriteLists", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.FavoriteListItem", b =>
@@ -177,7 +177,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("FavoriteListId", "PublicationId")
                         .IsUnique();
 
-                    b.ToTable("FavoriteListItems");
+                    b.ToTable("FavoriteListItems", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.Publication", b =>
@@ -277,7 +277,7 @@ namespace Ventagram.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Publications");
+                    b.ToTable("Publications", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationCategory", b =>
@@ -306,7 +306,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("Group", "Name")
                         .IsUnique();
 
-                    b.ToTable("PublicationCategories");
+                    b.ToTable("PublicationCategories", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationCategoryField", b =>
@@ -326,6 +326,10 @@ namespace Ventagram.Migrations
                     b.Property<byte?>("GroupId")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("GroupId");
+
+                    b.Property<string>("InputExample")
+                        .HasMaxLength(180)
+                        .HasColumnType("varchar(180)");
 
                     b.Property<string>("InternalName")
                         .IsRequired()
@@ -347,6 +351,9 @@ namespace Ventagram.Migrations
                     b.Property<bool>("Required")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("ShowInBasicData")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
@@ -363,7 +370,7 @@ namespace Ventagram.Migrations
 
                     b.HasIndex("GroupId", "CategoryId", "IsActive", "SortOrder");
 
-                    b.ToTable("PublicationCategoryFields");
+                    b.ToTable("PublicationCategoryFields", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationFieldValue", b =>
@@ -402,7 +409,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("PublicationId", "CategoryFieldId")
                         .IsUnique();
 
-                    b.ToTable("PublicationFieldValues");
+                    b.ToTable("PublicationFieldValues", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationGroupType", b =>
@@ -425,7 +432,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("PublicationGroupTypes");
+                    b.ToTable("PublicationGroupTypes", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationMedia", b =>
@@ -463,7 +470,7 @@ namespace Ventagram.Migrations
 
                     b.HasIndex("PublicationId", "MediaType", "IsPrimary");
 
-                    b.ToTable("PublicationMedia");
+                    b.ToTable("PublicationMedia", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationReport", b =>
@@ -492,7 +499,7 @@ namespace Ventagram.Migrations
 
                     b.HasIndex("ReasonId");
 
-                    b.ToTable("PublicationReports");
+                    b.ToTable("PublicationReports", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.PublicationReportReason", b =>
@@ -519,7 +526,7 @@ namespace Ventagram.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("PublicationReportReasons");
+                    b.ToTable("PublicationReportReasons", (string)null);
                 });
 
             modelBuilder.Entity("Ventagram.Models.ApplicationUser", b =>
