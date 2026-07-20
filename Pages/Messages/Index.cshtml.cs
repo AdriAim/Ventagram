@@ -10,23 +10,14 @@ public class IndexModel(IConfiguration configuration) : PageModel
     [BindProperty(SupportsGet = true)]
     public int? Id { get; set; }
 
-    public IActionResult OnGet()
+    public string ChatBaseUrl { get; private set; } = string.Empty;
+
+    public void OnGet()
     {
-        var chatBaseUrl = (configuration["Chat:BaseUrl"] ?? string.Empty).TrimEnd('/');
-        if (chatBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
+        ChatBaseUrl = (configuration["Chat:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        if (ChatBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
         {
-            chatBaseUrl = string.Empty;
+            ChatBaseUrl = string.Empty;
         }
-
-        if (string.IsNullOrWhiteSpace(chatBaseUrl))
-        {
-            return RedirectToPage("/Index");
-        }
-
-        var targetUrl = Id.HasValue
-            ? $"{chatBaseUrl}/Mensajes/{Id.Value}"
-            : $"{chatBaseUrl}/Mensajes";
-
-        return Redirect(targetUrl);
     }
 }

@@ -1,9 +1,0 @@
-@page "/Mensajes/{id:int?}"
-@model Ventagram.ChatService.Pages.Messages.IndexModel
-@{
-    ViewData["Title"] = "Mensajes";
-}
-
-<div class="chat-page-loader" id="api-page" data-page-kind="chat" data-api-endpoint="/api/chat/page/@(Model.Id?.ToString() ?? string.Empty)">
-    Cargando conversaciones...
-</div>

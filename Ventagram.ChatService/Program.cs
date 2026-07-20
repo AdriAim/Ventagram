@@ -7,8 +7,7 @@ using Ventagram.ChatService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllersWithViews();
-builder.Services.AddRazorPages();
+builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 
@@ -57,6 +56,12 @@ builder.Services
         {
             OnRedirectToLogin = context =>
             {
+                if (IsApiRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                }
+
                 var publicationBaseUrl = (builder.Configuration["Chat:PublicationBaseUrl"] ?? string.Empty).TrimEnd('/');
                 if (string.IsNullOrWhiteSpace(publicationBaseUrl))
                 {
@@ -66,6 +71,17 @@ builder.Services
 
                 var returnUrl = Uri.EscapeDataString($"{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}");
                 context.Response.Redirect($"{publicationBaseUrl}/Account/Login?returnUrl={returnUrl}");
+                return Task.CompletedTask;
+            },
+            OnRedirectToAccessDenied = context =>
+            {
+                if (IsApiRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
                 return Task.CompletedTask;
             }
         };
@@ -86,12 +102,11 @@ using (var scope = app.Services.CreateScope())
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
+    app.UseExceptionHandler("/error");
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
 app.UseRouting();
 if (allowedCorsOrigins.Length > 0)
 {
@@ -100,17 +115,25 @@ if (allowedCorsOrigins.Length > 0)
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/", context =>
+app.MapGet("/", () => Results.Ok(new
 {
-    context.Response.Redirect("/Mensajes");
-    return Task.CompletedTask;
-});
+    service = "Ventagram.ChatService",
+    status = "ok"
+}));
+
+app.MapGet("/error", () => Results.Problem("Se produjo un error en el servicio de chat."));
 
 app.MapControllers();
-app.MapRazorPages();
 app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();
+
+static bool IsApiRequest(HttpRequest request)
+{
+    return request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(request.Headers["X-Requested-With"], "fetch", StringComparison.OrdinalIgnoreCase);
+}
 
 static async Task EnsureChatTablesAsync(ChatDbContext db)
 {

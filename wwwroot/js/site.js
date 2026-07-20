@@ -3880,7 +3880,7 @@
           throw new Error(payload?.message || "No se pudo abrir el chat.");
         }
 
-        window.location.href = payload.redirectUrl || buildChatServiceUrl("/Mensajes") || "/Mensajes";
+        window.location.href = payload.redirectUrl || "/Mensajes";
       } catch (error) {
         window.alert(error.message || "No se pudo abrir el chat.");
       } finally {

@@ -21,7 +21,7 @@ public class ChatController(
         }
 
         var model = await chatService.GetPageAsync(userId, conversationId);
-        return PartialView("~/Views/Chat/Page.cshtml", model);
+        return Ok(model);
     }
 
     [HttpGet("inbox/{conversationId:int?}")]
@@ -33,7 +33,12 @@ public class ChatController(
         }
 
         var model = await chatService.GetPageAsync(userId, conversationId);
-        return PartialView("~/Views/Chat/_Inbox.cshtml", model);
+        return Ok(new
+        {
+            currentUserId = model.CurrentUserId,
+            inbox = model.Inbox,
+            selectedConversationId = model.SelectedConversation?.ConversationId
+        });
     }
 
     [HttpGet("thread/{conversationId:int?}")]
@@ -45,7 +50,11 @@ public class ChatController(
         }
 
         var model = await chatService.GetPageAsync(userId, conversationId);
-        return PartialView("~/Views/Chat/_Thread.cshtml", model);
+        return Ok(new
+        {
+            currentUserId = model.CurrentUserId,
+            selectedConversation = model.SelectedConversation
+        });
     }
 
     [HttpGet("unread-count")]
@@ -76,15 +85,15 @@ public class ChatController(
         try
         {
             var conversation = await chatService.GetOrCreateConversationAsync(request.PublicationId, userId);
-            var publicBaseUrl = (configuration["Chat:PublicBaseUrl"] ?? string.Empty).TrimEnd('/');
-            if (publicBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
+            var publicationBaseUrl = (configuration["Chat:PublicationBaseUrl"] ?? string.Empty).TrimEnd('/');
+            if (publicationBaseUrl.Contains(".example.com", StringComparison.OrdinalIgnoreCase))
             {
-                publicBaseUrl = string.Empty;
+                publicationBaseUrl = string.Empty;
             }
 
-            var redirectUrl = string.IsNullOrWhiteSpace(publicBaseUrl)
+            var redirectUrl = string.IsNullOrWhiteSpace(publicationBaseUrl)
                 ? $"/Mensajes/{conversation.Id}"
-                : $"{publicBaseUrl}/Mensajes/{conversation.Id}";
+                : $"{publicationBaseUrl}/Mensajes/{conversation.Id}";
             return Ok(new
             {
                 conversationId = conversation.Id,
