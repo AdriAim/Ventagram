@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 using Ventagram.ChatService.Data;
 using Ventagram.ChatService.Hubs;
 using Ventagram.ChatService.Services;
@@ -36,10 +37,23 @@ if (allowedCorsOrigins.Length > 0)
     });
 }
 
+var chatConnectionString = builder.Configuration.GetConnectionString("ChatConnection")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Falta ConnectionStrings:ChatConnection.");
+var ventagramConnectionString = builder.Configuration.GetConnectionString("VentagramConnection")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Falta ConnectionStrings:VentagramConnection.");
+
+await EnsureMySqlDatabaseExistsAsync(chatConnectionString);
+
 builder.Services.AddDbContext<ChatDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+    options.UseMySql(chatConnectionString, ServerVersion.AutoDetect(chatConnectionString));
+});
+
+builder.Services.AddDbContext<VentagramLookupDbContext>(options =>
+{
+    options.UseMySql(ventagramConnectionString, ServerVersion.AutoDetect(ventagramConnectionString));
 });
 
 builder.Services
@@ -133,6 +147,27 @@ static bool IsApiRequest(HttpRequest request)
     return request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
         || request.Path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase)
         || string.Equals(request.Headers["X-Requested-With"], "fetch", StringComparison.OrdinalIgnoreCase);
+}
+
+static async Task EnsureMySqlDatabaseExistsAsync(string connectionString)
+{
+    var builder = new MySqlConnectionStringBuilder(connectionString);
+    var databaseName = builder.Database;
+    if (string.IsNullOrWhiteSpace(databaseName))
+    {
+        throw new InvalidOperationException("La conexion de chat debe incluir el nombre de la base de datos.");
+    }
+
+    var adminBuilder = new MySqlConnectionStringBuilder(connectionString)
+    {
+        Database = string.Empty
+    };
+
+    await using var connection = new MySqlConnection(adminBuilder.ConnectionString);
+    await connection.OpenAsync();
+    await using var command = connection.CreateCommand();
+    command.CommandText = $"CREATE DATABASE IF NOT EXISTS `{databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
+    await command.ExecuteNonQueryAsync();
 }
 
 static async Task EnsureChatTablesAsync(ChatDbContext db)

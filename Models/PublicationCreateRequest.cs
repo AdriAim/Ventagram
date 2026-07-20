@@ -1,11 +1,8 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace Ventagram.Models;
 
 public class PublicationCreateRequest
 {
     public PublicationGroup Group { get; set; } = PublicationGroup.Inmuebles;
-    [Range(1, int.MaxValue, ErrorMessage = "Selecciona una categoria.")]
     public int CategoryId { get; set; }
     public string Title { get; set; } = string.Empty;
     public decimal Price { get; set; }

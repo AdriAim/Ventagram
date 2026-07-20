@@ -6,7 +6,6 @@ public class ChatMessage
     public int ConversationId { get; set; }
     public ChatConversation? Conversation { get; set; }
     public int SenderUserId { get; set; }
-    public ApplicationUser? SenderUser { get; set; }
     public string Body { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? ReadAtUtc { get; set; }

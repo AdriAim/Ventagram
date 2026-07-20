@@ -2539,10 +2539,6 @@
 
   function enhanceSearchableSelects(root = document) {
     root.querySelectorAll("[data-searchable-select-root]").forEach(wrapper => {
-      const input = wrapper.querySelector(".searchable-select-input");
-      if (input && typeof window.jQuery === "function" && typeof window.jQuery(input).typeahead === "function") {
-        window.jQuery(input).typeahead("destroy");
-      }
       const select = wrapper.querySelector("select");
       if (select) {
         wrapper.parentNode?.insertBefore(select, wrapper);
@@ -2558,7 +2554,8 @@
 
       let options = Array.from(select.options || []);
       const searchableOptions = options.filter(option => String(option.value || "").trim() !== "");
-      if (searchableOptions.length <= 10) return;
+      const shouldAlwaysBeSearchable = select.matches("[data-category-select]");
+      if (searchableOptions.length <= 10 && !shouldAlwaysBeSearchable) return;
 
       const hasEmptyOption = options.some(option => String(option.value || "").trim() === "");
       if (!hasEmptyOption && !String(select.dataset.selectedCategoryId || select.value || "").trim()) {
@@ -2578,12 +2575,27 @@
       input.type = "text";
       input.className = "searchable-select-input";
       input.placeholder = options[0]?.textContent?.trim() || "Buscar y seleccionar";
+      input.autocomplete = "off";
+      input.setAttribute("role", "combobox");
+      input.setAttribute("aria-autocomplete", "list");
+      input.setAttribute("aria-expanded", "false");
 
-      const typeaheadItems = searchableOptions.map(option => ({
+      const listId = `searchable-select-${createClientId()}`;
+      const menu = document.createElement("div");
+      menu.className = "searchable-select-menu";
+      menu.id = listId;
+      menu.hidden = true;
+      menu.setAttribute("role", "listbox");
+      input.setAttribute("aria-controls", listId);
+
+      const searchableItems = searchableOptions.map(option => ({
         value: String(option.value || ""),
         label: String(option.textContent || "").trim()
       }));
       const emptyOptionLabel = select.options[0]?.textContent?.trim() || "Debe seleccionar";
+      let activeIndex = -1;
+
+      const normalizeSearchText = value => String(value || "").trim().toLocaleLowerCase("es");
 
       const syncInputFromSelect = () => {
         const selectedOption = select.selectedOptions?.[0];
@@ -2592,15 +2604,6 @@
           ? (selectedOption?.textContent?.trim() || "")
           : "";
         input.placeholder = emptyOptionLabel;
-      };
-
-      const openAllOptions = () => {
-        if (typeof window.jQuery !== "function" || typeof window.jQuery(input).typeahead !== "function") return;
-        const $input = window.jQuery(input);
-        $input.typeahead("val", "");
-        input.value = "";
-        $input.typeahead("open");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
       };
 
       const resetToSelectableState = () => {
@@ -2639,6 +2642,84 @@
         }
       };
 
+      const getFilteredItems = () => {
+        const query = normalizeSearchText(input.value);
+        if (!query) return searchableItems;
+
+        return searchableItems.filter(item => normalizeSearchText(item.label).includes(query));
+      };
+
+      const closeMenu = () => {
+        activeIndex = -1;
+        menu.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+      };
+
+      const setActiveItem = index => {
+        const items = Array.from(menu.querySelectorAll("[data-searchable-option]"));
+        if (!items.length) {
+          activeIndex = -1;
+          input.removeAttribute("aria-activedescendant");
+          return;
+        }
+
+        activeIndex = Math.max(0, Math.min(index, items.length - 1));
+        items.forEach((item, itemIndex) => {
+          item.classList.toggle("is-active", itemIndex === activeIndex);
+        });
+
+        const activeItem = items[activeIndex];
+        input.setAttribute("aria-activedescendant", activeItem.id);
+        activeItem.scrollIntoView({ block: "nearest" });
+      };
+
+      const selectItem = item => {
+        if (!item?.value) return;
+
+        if (select.value !== item.value) {
+          select.value = item.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        syncInputFromSelect();
+        syncSearchableSelectErrorState();
+        closeMenu();
+      };
+
+      const renderMenu = () => {
+        const filteredItems = getFilteredItems().slice(0, 80);
+        menu.innerHTML = "";
+
+        if (!filteredItems.length) {
+          const emptyItem = document.createElement("div");
+          emptyItem.className = "searchable-select-empty";
+          emptyItem.textContent = "Sin resultados";
+          menu.appendChild(emptyItem);
+        } else {
+          filteredItems.forEach((item, index) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.id = `${listId}-option-${index}`;
+            option.className = "searchable-select-option";
+            option.dataset.searchableOption = "true";
+            option.setAttribute("role", "option");
+            option.textContent = item.label;
+            option.addEventListener("mousedown", event => event.preventDefault());
+            option.addEventListener("click", () => selectItem(item));
+            menu.appendChild(option);
+          });
+        }
+
+        menu.hidden = false;
+        input.setAttribute("aria-expanded", "true");
+        activeIndex = -1;
+      };
+
+      const openMenu = () => {
+        renderMenu();
+      };
+
       const syncSelectFromInput = () => {
         const raw = String(input.value || "").trim();
         if (!raw) {
@@ -2647,7 +2728,7 @@
           return;
         }
 
-        const match = typeaheadItems.find(option =>
+        const match = searchableItems.find(option =>
           option.label.localeCompare(raw, "es", { sensitivity: "base" }) === 0
         );
 
@@ -2660,31 +2741,71 @@
       };
 
       input.addEventListener("change", syncSelectFromInput);
-      input.addEventListener("blur", () => {
-        const raw = String(input.value || "").trim();
-        if (!raw) {
-          resetToSelectableState();
-          syncSearchableSelectErrorState(true);
-          return;
-        }
-
-        const match = typeaheadItems.find(option =>
-          option.label.localeCompare(raw, "es", { sensitivity: "base" }) === 0
-        );
-
-        if (!match) {
-          resetToSelectableState();
-          syncSearchableSelectErrorState(true);
-          return;
-        }
-
-        if (select.value !== match.value) {
-          select.value = match.value;
+      input.addEventListener("click", openMenu);
+      input.addEventListener("input", () => {
+        if (!String(input.value || "").trim()) {
+          select.value = "";
           select.dispatchEvent(new Event("change", { bubbles: true }));
         }
 
-        syncInputFromSelect();
-        syncSearchableSelectErrorState();
+        renderMenu();
+      });
+      input.addEventListener("keydown", event => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          if (menu.hidden) {
+            renderMenu();
+          }
+          setActiveItem(activeIndex + 1);
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          if (menu.hidden) {
+            renderMenu();
+          }
+          setActiveItem(activeIndex <= 0 ? menu.querySelectorAll("[data-searchable-option]").length - 1 : activeIndex - 1);
+          return;
+        }
+
+        if (event.key === "Enter" && !menu.hidden) {
+          const items = Array.from(menu.querySelectorAll("[data-searchable-option]"));
+          const selectedButton = items[activeIndex];
+          if (selectedButton) {
+            event.preventDefault();
+            selectedButton.click();
+          }
+          return;
+        }
+
+        if (event.key === "Escape") {
+          closeMenu();
+        }
+      });
+      input.addEventListener("blur", () => {
+        window.setTimeout(() => {
+          const raw = String(input.value || "").trim();
+          if (!raw) {
+            resetToSelectableState();
+            syncSearchableSelectErrorState(true);
+            closeMenu();
+            return;
+          }
+
+          const match = searchableItems.find(option =>
+            option.label.localeCompare(raw, "es", { sensitivity: "base" }) === 0
+          );
+
+          if (!match) {
+            resetToSelectableState();
+            syncSearchableSelectErrorState(true);
+            closeMenu();
+            return;
+          }
+
+          selectItem(match);
+        }, 120);
       });
       select.addEventListener("change", () => {
         syncInputFromSelect();
@@ -2696,54 +2817,8 @@
       select.classList.add("searchable-select-native");
       select.parentNode?.insertBefore(wrapper, select);
       wrapper.appendChild(input);
+      wrapper.appendChild(menu);
       wrapper.appendChild(select);
-
-      if (typeof window.jQuery === "function" && typeof window.jQuery(input).typeahead === "function") {
-        const $input = window.jQuery(input);
-        $input.typeahead(
-          {
-            hint: false,
-            highlight: false,
-            minLength: 0
-          },
-          {
-            name: `searchable-select-${createClientId()}`,
-            display: "label",
-            limit: 50,
-            source(query, syncResults) {
-              const normalizedQuery = String(query || "").trim().toLocaleLowerCase("es");
-              const results = normalizedQuery.length === 0
-                ? typeaheadItems
-                : typeaheadItems.filter(item => item.label.toLocaleLowerCase("es").includes(normalizedQuery));
-              syncResults(results);
-            }
-          }
-        );
-
-        $input.on("typeahead:select typeahead:autocomplete", (_, item) => {
-          if (!item?.value) return;
-          if (select.value !== item.value) {
-            select.value = item.value;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-          syncInputFromSelect();
-        });
-
-        $input.on("focus click", () => {
-          window.setTimeout(openAllOptions, 0);
-        });
-
-        $input.on("input", () => {
-          $input.typeahead("open");
-        });
-
-        input.addEventListener("keydown", event => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            openAllOptions();
-          }
-        });
-      }
     });
   }
 

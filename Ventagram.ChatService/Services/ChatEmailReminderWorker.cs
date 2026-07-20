@@ -37,27 +37,44 @@ public class ChatEmailReminderWorker(
     {
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
+        var lookupDb = scope.ServiceProvider.GetRequiredService<VentagramLookupDbContext>();
         var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
 
         var threshold = DateTime.UtcNow - ReminderDelay;
         var candidates = await db.ChatMessages
             .Include(x => x.Conversation!)
-                .ThenInclude(x => x.Publication)
-            .Include(x => x.Conversation!)
-                .ThenInclude(x => x.BuyerUser)
-            .Include(x => x.Conversation!)
-                .ThenInclude(x => x.SellerUser)
-            .Include(x => x.SenderUser)
             .Where(x => x.EmailReminderSentAtUtc == null && x.CreatedAtUtc <= threshold)
             .OrderBy(x => x.CreatedAtUtc)
             .Take(50)
             .ToListAsync(cancellationToken);
 
+        var publicationIds = candidates
+            .Select(x => x.Conversation?.PublicationId)
+            .Where(x => x.HasValue)
+            .Select(x => x!.Value)
+            .Distinct()
+            .ToList();
+        var userIds = candidates
+            .SelectMany(x => x.Conversation is null
+                ? []
+                : new[] { x.Conversation.BuyerUserId, x.Conversation.SellerUserId, x.SenderUserId })
+            .Distinct()
+            .ToList();
+
+        var publications = await lookupDb.Publications
+            .AsNoTracking()
+            .Where(x => publicationIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        var users = await lookupDb.Users
+            .AsNoTracking()
+            .Where(x => userIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+
         foreach (var message in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var recipient = ResolveRecipient(message);
+            var recipient = ResolveRecipient(message, users);
             if (recipient is null || !recipient.RespondsEmails || string.IsNullOrWhiteSpace(recipient.Email))
             {
                 message.EmailReminderSentAtUtc = DateTime.UtcNow;
@@ -76,8 +93,8 @@ public class ChatEmailReminderWorker(
                 continue;
             }
 
-            var publication = message.Conversation?.Publication;
-            var senderName = message.SenderUser?.Name ?? "Usuario";
+            publications.TryGetValue(message.Conversation?.PublicationId ?? 0, out var publication);
+            var senderName = users.TryGetValue(message.SenderUserId, out var sender) ? sender.Name : "Usuario";
             var publicationTitle = publication?.Title ?? "un anuncio";
             var publicBaseUrl = (configuration["Chat:PublicBaseUrl"] ?? string.Empty).TrimEnd('/');
             var detailsUrl = string.IsNullOrWhiteSpace(publicBaseUrl)
@@ -119,7 +136,7 @@ public class ChatEmailReminderWorker(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    private static ApplicationUser? ResolveRecipient(ChatMessage message)
+    private static ApplicationUser? ResolveRecipient(ChatMessage message, IReadOnlyDictionary<int, ApplicationUser> users)
     {
         var conversation = message.Conversation;
         if (conversation is null)
@@ -127,8 +144,10 @@ public class ChatEmailReminderWorker(
             return null;
         }
 
-        return message.SenderUserId == conversation.BuyerUserId
-            ? conversation.SellerUser
-            : conversation.BuyerUser;
+        var recipientUserId = message.SenderUserId == conversation.BuyerUserId
+            ? conversation.SellerUserId
+            : conversation.BuyerUserId;
+
+        return users.TryGetValue(recipientUserId, out var recipient) ? recipient : null;
     }
 }

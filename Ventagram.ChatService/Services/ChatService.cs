@@ -5,7 +5,7 @@ using Ventagram.ChatService.ViewModels;
 
 namespace Ventagram.ChatService.Services;
 
-public class ChatAppService(ChatDbContext db, IConfiguration configuration)
+public class ChatAppService(ChatDbContext db, VentagramLookupDbContext lookupDb, IConfiguration configuration)
 {
     public const int MaxMessageLength = 2000;
 
@@ -20,7 +20,7 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
 
     public async Task<ChatConversation> GetOrCreateConversationAsync(int publicationId, int buyerUserId)
     {
-        var publication = await db.Publications
+        var publication = await lookupDb.Publications
             .Include(x => x.User)
             .FirstOrDefaultAsync(x => x.Id == publicationId);
 
@@ -114,10 +114,7 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
     public async Task<ChatMessageViewModel> SendMessageAsync(int conversationId, int senderUserId, string body)
     {
         var normalizedBody = NormalizeBody(body);
-        var conversation = await db.ChatConversations
-            .Include(x => x.BuyerUser)
-            .Include(x => x.SellerUser)
-            .FirstOrDefaultAsync(x => x.Id == conversationId);
+        var conversation = await db.ChatConversations.FirstOrDefaultAsync(x => x.Id == conversationId);
 
         if (conversation is null)
         {
@@ -141,9 +138,10 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
         conversation.LastMessagePreview = BuildPreview(normalizedBody);
         await db.SaveChangesAsync();
 
-        var senderName = senderUserId == conversation.BuyerUserId
-            ? conversation.BuyerUser?.Name
-            : conversation.SellerUser?.Name;
+        var senderName = await lookupDb.Users
+            .Where(x => x.Id == senderUserId)
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync();
 
         return new ChatMessageViewModel
         {
@@ -216,10 +214,6 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
     {
         var conversations = db.ChatConversations
             .AsNoTracking()
-            .Include(x => x.Publication)
-                .ThenInclude(x => x!.MediaItems)
-            .Include(x => x.BuyerUser)
-            .Include(x => x.SellerUser)
             .Include(x => x.Messages)
             .Where(x => x.BuyerUserId == userId || x.SellerUserId == userId);
 
@@ -228,24 +222,17 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
             conversations = conversations.Where(x => x.Id == onlyConversationId.Value);
         }
 
-        return await conversations
+        var conversationRows = await conversations
             .OrderByDescending(x => x.LastMessageAtUtc ?? x.CreatedAtUtc)
-            .Select(x => new ChatInboxItemViewModel
+            .Select(x => new
             {
-                ConversationId = x.Id,
-                PublicationId = x.PublicationId,
-                PublicationTitle = x.Publication!.Title,
-                PublicationPrice = $"{x.Publication.Currency} {x.Publication.Price:N0}",
-                PublicationLocality = x.Publication.Locality,
-                PublicationImageUrl = x.Publication.MediaItems
-                    .OrderBy(m => m.SortOrder)
-                    .Select(m => m.Url)
-                    .FirstOrDefault(),
-                OtherParticipantName = x.BuyerUserId == userId
-                    ? x.SellerUser!.Name
-                    : x.BuyerUser!.Name,
-                LastMessagePreview = x.LastMessagePreview ?? "Conversacion iniciada",
-                LastMessageAtUtc = x.LastMessageAtUtc ?? x.CreatedAtUtc,
+                x.Id,
+                x.PublicationId,
+                x.BuyerUserId,
+                x.SellerUserId,
+                x.LastMessagePreview,
+                x.LastMessageAtUtc,
+                x.CreatedAtUtc,
                 UnreadCount = x.Messages.Count(m => m.SenderUserId != userId && m.ReadAtUtc == null),
                 LastMessageSentByCurrentUser = x.Messages
                     .OrderByDescending(m => m.CreatedAtUtc)
@@ -253,18 +240,57 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
                     .FirstOrDefault()
             })
             .ToListAsync();
+
+        var publicationIds = conversationRows.Select(x => x.PublicationId).Distinct().ToList();
+        var userIds = conversationRows
+            .SelectMany(x => new[] { x.BuyerUserId, x.SellerUserId })
+            .Distinct()
+            .ToList();
+
+        var publications = await lookupDb.Publications
+            .AsNoTracking()
+            .Include(x => x.MediaItems)
+            .Where(x => publicationIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+
+        var users = await lookupDb.Users
+            .AsNoTracking()
+            .Where(x => userIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+
+        return conversationRows
+            .Select(x =>
+            {
+                publications.TryGetValue(x.PublicationId, out var publication);
+                var otherUserId = x.BuyerUserId == userId ? x.SellerUserId : x.BuyerUserId;
+                users.TryGetValue(otherUserId, out var otherUser);
+
+                return new ChatInboxItemViewModel
+                {
+                    ConversationId = x.Id,
+                    PublicationId = x.PublicationId,
+                    PublicationTitle = publication?.Title ?? "Publicacion",
+                    PublicationPrice = publication is null ? string.Empty : $"{publication.Currency} {publication.Price:N0}",
+                    PublicationLocality = publication?.Locality ?? string.Empty,
+                    PublicationImageUrl = publication?.MediaItems
+                        .OrderBy(m => m.SortOrder)
+                        .Select(m => m.Url)
+                        .FirstOrDefault(),
+                    OtherParticipantName = otherUser?.Name ?? "Usuario",
+                    LastMessagePreview = x.LastMessagePreview ?? "Conversacion iniciada",
+                    LastMessageAtUtc = x.LastMessageAtUtc ?? x.CreatedAtUtc,
+                    UnreadCount = x.UnreadCount,
+                    LastMessageSentByCurrentUser = x.LastMessageSentByCurrentUser
+                };
+            })
+            .ToList();
     }
 
     private async Task<ChatConversationViewModel?> LoadConversationAsync(int conversationId, int userId)
     {
         var conversation = await db.ChatConversations
             .AsNoTracking()
-            .Include(x => x.Publication)
-                .ThenInclude(x => x!.MediaItems)
-            .Include(x => x.BuyerUser)
-            .Include(x => x.SellerUser)
             .Include(x => x.Messages.OrderBy(m => m.CreatedAtUtc))
-                .ThenInclude(x => x.SenderUser)
             .FirstOrDefaultAsync(x =>
                 x.Id == conversationId
                 && (x.BuyerUserId == userId || x.SellerUserId == userId));
@@ -275,25 +301,36 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
         }
 
         var isBuyer = conversation.BuyerUserId == userId;
-        var otherUser = isBuyer ? conversation.SellerUser : conversation.BuyerUser;
-        var publication = conversation.Publication!;
+        var otherUserId = isBuyer ? conversation.SellerUserId : conversation.BuyerUserId;
+        var publication = await lookupDb.Publications
+            .AsNoTracking()
+            .Include(x => x.MediaItems)
+            .FirstOrDefaultAsync(x => x.Id == conversation.PublicationId);
+        var otherUser = await lookupDb.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == otherUserId);
+        var senderIds = conversation.Messages.Select(x => x.SenderUserId).Distinct().ToList();
+        var senderNames = await lookupDb.Users
+            .AsNoTracking()
+            .Where(x => senderIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Name);
         var contactPhone = otherUser?.Phone ?? string.Empty;
         var publicationBaseUrl = (configuration["Chat:PublicationBaseUrl"] ?? string.Empty).TrimEnd('/');
 
         return new ChatConversationViewModel
         {
             ConversationId = conversation.Id,
-            PublicationId = publication.Id,
-            PublicationTitle = publication.Title,
-            PublicationPrice = $"{publication.Currency} {publication.Price:N0}",
-            PublicationLocality = publication.Locality,
-            PublicationImageUrl = publication.MediaItems
+            PublicationId = publication?.Id ?? conversation.PublicationId,
+            PublicationTitle = publication?.Title ?? "Publicacion",
+            PublicationPrice = publication is null ? string.Empty : $"{publication.Currency} {publication.Price:N0}",
+            PublicationLocality = publication?.Locality ?? string.Empty,
+            PublicationImageUrl = publication?.MediaItems
                 .OrderBy(x => x.SortOrder)
                 .Select(x => x.Url)
                 .FirstOrDefault(),
             PublicationDetailsUrl = string.IsNullOrWhiteSpace(publicationBaseUrl)
-                ? $"/Publications/Details/{publication.Id}"
-                : $"{publicationBaseUrl}/Publications/Details/{publication.Id}",
+                ? $"/Publications/Details/{conversation.PublicationId}"
+                : $"{publicationBaseUrl}/Publications/Details/{conversation.PublicationId}",
             OtherParticipantName = otherUser?.Name ?? "Usuario",
             OtherParticipantEmail = otherUser?.Email ?? string.Empty,
             OtherParticipantPhone = contactPhone,
@@ -306,7 +343,7 @@ public class ChatAppService(ChatDbContext db, IConfiguration configuration)
                 {
                     Id = x.Id,
                     IsMine = x.SenderUserId == userId,
-                    SenderName = x.SenderUser?.Name ?? "Usuario",
+                    SenderName = senderNames.TryGetValue(x.SenderUserId, out var senderName) ? senderName : "Usuario",
                     Body = x.Body,
                     CreatedAtUtc = x.CreatedAtUtc,
                     ReadAtUtc = x.ReadAtUtc

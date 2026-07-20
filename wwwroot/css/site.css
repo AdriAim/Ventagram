@@ -2126,6 +2126,26 @@ textarea:focus {
   z-index: 30;
 }
 
+.searchable-select-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 253, 252, 0.98);
+  box-shadow: var(--shadow);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 30;
+}
+
+.searchable-select-menu[hidden] {
+  display: none;
+}
+
 .searchable-select .tt-suggestion {
   padding: 0.7rem 0.85rem;
   border-radius: 14px;
@@ -2133,9 +2153,31 @@ textarea:focus {
   cursor: pointer;
 }
 
+.searchable-select-option,
+.searchable-select-empty {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.searchable-select-option {
+  cursor: pointer;
+}
+
 .searchable-select .tt-suggestion.tt-cursor,
-.searchable-select .tt-suggestion:hover {
+.searchable-select .tt-suggestion:hover,
+.searchable-select-option.is-active,
+.searchable-select-option:hover {
   background: rgba(49, 70, 101, 0.08);
+}
+
+.searchable-select-empty {
+  color: var(--muted);
 }
 
 .searchable-select-native {

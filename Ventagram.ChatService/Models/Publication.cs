@@ -12,5 +12,4 @@ public class Publication
     public bool IsAnonymous { get; set; }
     public bool IsActive { get; set; }
     public List<PublicationMedia> MediaItems { get; set; } = [];
-    public List<ChatConversation> ChatConversations { get; set; } = [];
 }

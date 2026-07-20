@@ -568,14 +568,27 @@ public class ContentController(
         }
 
         if (!await publicationGroupTypeService.ExistsAsync(request.Group)) AddError("group", "Selecciona el tipo de publicacion.");
-        if (!await publicationCategoryService.ExistsAsync(request.Group, request.CategoryId))
+
+        var categoryExists = false;
+        if (request.CategoryId <= 0)
         {
-            AddError("category", "La categoria no corresponde al tipo elegido.");
+            AddError("category", "Selecciona una categoria.");
+        }
+        else
+        {
+            categoryExists = await publicationCategoryService.ExistsAsync(request.Group, request.CategoryId);
+            if (!categoryExists)
+            {
+                AddError("category", "La categoria no corresponde al tipo elegido.");
+            }
         }
 
-        foreach (var dynamicError in await publicationService.ValidateDynamicFieldsAsync(request))
+        if (categoryExists)
         {
-            errors.Add(dynamicError);
+            foreach (var dynamicError in await publicationService.ValidateDynamicFieldsAsync(request))
+            {
+                errors.Add(dynamicError);
+            }
         }
 
         if (request.Price <= 0) AddError("price", "Ingresa un precio mayor a cero.");
