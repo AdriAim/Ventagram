@@ -4,10 +4,67 @@
     var currentGroup = string.IsNullOrWhiteSpace(Model.Group) ? "Inmuebles" : Model.Group;
     var previousPage = Math.Max(1, Model.Page - 1);
     var nextPage = Math.Min(Math.Max(1, Model.TotalPages), Model.Page + 1);
+    var searchPath = "/Buscar";
+    var selectedFilters = Model.SelectedFieldFilters ?? [];
+    var filterFields = Model.RequiredFilterFields ?? [];
+    var selectedFilterLookup = selectedFilters
+        .Where(x => x.FieldId > 0)
+        .GroupBy(x => x.FieldId)
+        .ToDictionary(x => x.Key, x => x.First().Value ?? string.Empty);
+    var priceSliderMax = Math.Max(Model.PriceSliderMax, Math.Max(Model.PriceTo ?? 0m, 100000m));
+    var priceFromValue = Math.Max(0m, Model.PriceFrom ?? 0m);
+    var priceToValue = Math.Max(priceFromValue, Model.PriceTo ?? priceSliderMax);
+    var baseQueryParts = new List<string>
+    {
+        $"group={Uri.EscapeDataString(currentGroup)}",
+        $"mode={Uri.EscapeDataString(currentMode)}",
+        $"query={Uri.EscapeDataString(Model.Query ?? string.Empty)}"
+    };
+
+    if (Model.PriceFrom.HasValue)
+    {
+        baseQueryParts.Add($"priceFrom={Uri.EscapeDataString(Model.PriceFrom.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
+    }
+
+    if (Model.PriceTo.HasValue)
+    {
+        baseQueryParts.Add($"priceTo={Uri.EscapeDataString(Model.PriceTo.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
+    }
+
+    foreach (var filter in selectedFilters.Where(x => x.FieldId > 0 && !string.IsNullOrWhiteSpace(x.Value)))
+    {
+        baseQueryParts.Add($"filterFieldId={filter.FieldId}");
+        baseQueryParts.Add($"filterValue={Uri.EscapeDataString(filter.Value ?? string.Empty)}");
+    }
+
+    string BuildSearchUrl(int page, int pageSize, string? mode = null)
+    {
+        var parts = baseQueryParts
+            .Where(x => !x.StartsWith("mode=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        parts.Insert(1, $"mode={Uri.EscapeDataString(mode ?? currentMode)}");
+        parts.Add($"page={page}");
+        parts.Add($"pageSize={pageSize}");
+        return $"{searchPath}?{string.Join("&", parts)}";
+    }
+
+    string[] SplitOptions(string? optionsCsv) => string.IsNullOrWhiteSpace(optionsCsv)
+        ? []
+        : optionsCsv.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    object MapRequiredFilterField(PublicationCategoryField field) => new
+    {
+        id = field.Id,
+        label = field.Label,
+        dataType = SplitOptions(field.OptionsCsv).Any()
+            ? PublicationCategoryFieldDataType.Lista.ToString().ToLowerInvariant()
+            : field.DataType.ToString().ToLowerInvariant(),
+        options = SplitOptions(field.OptionsCsv)
+    };
 }
 
 <section class="search-panel" id="search-panel" data-browse-search-panel>
-    <form method="get" action="/Buscar" class="search-grid" data-browse-search-form>
+    <form method="get" action="@searchPath" class="search-grid" data-browse-search-form data-required-filter-form="true" data-required-filter-fields-endpoint="/api/content/required-filter-fields">
         <label>
             <span>Qué buscás</span>
             <input name="query" value="@Model.Query" placeholder="Ej. departamento, Ford Fiesta, iPhone" />
@@ -36,6 +93,63 @@
                 <option selected="@(currentMode == "Galeria")">Galería</option>
             </select>
         </label>
+        <div class="price-range-filter" data-price-range-filter data-price-max="@priceSliderMax.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+            <div class="price-range-head">
+                <span>Precio</span>
+                <strong><span data-price-from-label>@priceFromValue.ToString("N0")</span> - <span data-price-to-label>@priceToValue.ToString("N0")</span></strong>
+            </div>
+            <input type="hidden" name="priceFrom" value="@priceFromValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-price-from-value />
+            <input type="hidden" name="priceTo" value="@priceToValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-price-to-value />
+            <div class="price-range-slider">
+                <div class="price-range-line"></div>
+                <div class="price-range-fill" data-price-range-fill></div>
+                <input type="range" min="0" max="@priceSliderMax.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="1000" value="@priceFromValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-price-from-range aria-label="Precio desde" />
+                <input type="range" min="0" max="@priceSliderMax.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="1000" value="@priceToValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-price-to-range aria-label="Precio hasta" />
+            </div>
+        </div>
+        @if (currentMode != "Texto")
+        {
+            <input type="hidden" name="pageSize" value="@Model.PageSize" />
+        }
+        <input type="hidden" name="page" value="1" />
+        <div class="required-filter-panel" data-required-filter-panel hidden="@(!filterFields.Any())">
+            <div class="required-filter-heading">
+                <strong>Mas filtros</strong>
+            </div>
+            <div class="required-filter-list" data-required-filter-list>
+                @foreach (var field in filterFields)
+                {
+                    var selectedValue = selectedFilterLookup.TryGetValue(field.Id, out var value) ? value : string.Empty;
+                    <label data-required-filter-row>
+                        <span>@field.Label</span>
+                        <input type="hidden" name="filterFieldId" value="@field.Id" />
+                        @if (SplitOptions(field.OptionsCsv).Any())
+                        {
+                            <select name="filterValue">
+                                <option value="">Todos</option>
+                                @foreach (var option in SplitOptions(field.OptionsCsv))
+                                {
+                                    <option value="@option" selected="@(string.Equals(option, selectedValue, StringComparison.OrdinalIgnoreCase))">@option</option>
+                                }
+                            </select>
+                        }
+                        else if (field.DataType == PublicationCategoryFieldDataType.Booleano)
+                        {
+                            <select name="filterValue">
+                                <option value="">Todos</option>
+                                <option value="true" selected="@(string.Equals(selectedValue, "true", StringComparison.OrdinalIgnoreCase))">Si</option>
+                                <option value="false" selected="@(string.Equals(selectedValue, "false", StringComparison.OrdinalIgnoreCase))">No</option>
+                            </select>
+                        }
+                        else
+                        {
+                            <input name="filterValue" type="@(field.DataType == PublicationCategoryFieldDataType.Numero ? "number" : "text")" step="0.01" value="@selectedValue" placeholder="Todos" />
+                        }
+                    </label>
+                }
+            </div>
+            <script type="application/json" data-required-filter-fields-json>@Html.Raw(System.Text.Json.JsonSerializer.Serialize(filterFields.Select(MapRequiredFilterField)))</script>
+        </div>
         @if (currentMode == "Texto")
         {
             <label>
@@ -47,11 +161,6 @@
                 </select>
             </label>
         }
-        else
-        {
-            <input type="hidden" name="pageSize" value="@Model.PageSize" />
-        }
-        <input type="hidden" name="page" value="1" />
         <button type="submit" class="primary-pill large">Buscar</button>
     </form>
 </section>
@@ -136,9 +245,9 @@ else if (currentMode == "Texto")
         </div>
         <div class="classified-page-size">
             Ver:
-            <a class="view-pill @(Model.PageSize == 50 ? "active" : "")" href="/Buscar?group=@currentGroup&mode=Texto&query=@Model.Query&page=1&pageSize=50">50</a>
-            <a class="view-pill @(Model.PageSize == 100 ? "active" : "")" href="/Buscar?group=@currentGroup&mode=Texto&query=@Model.Query&page=1&pageSize=100">100</a>
-            <a class="view-pill @(Model.PageSize == 200 ? "active" : "")" href="/Buscar?group=@currentGroup&mode=Texto&query=@Model.Query&page=1&pageSize=200">200</a>
+            <a class="view-pill @(Model.PageSize == 50 ? "active" : "")" href="@BuildSearchUrl(1, 50, "Texto")">50</a>
+            <a class="view-pill @(Model.PageSize == 100 ? "active" : "")" href="@BuildSearchUrl(1, 100, "Texto")">100</a>
+            <a class="view-pill @(Model.PageSize == 200 ? "active" : "")" href="@BuildSearchUrl(1, 200, "Texto")">200</a>
         </div>
     </section>
 
@@ -173,9 +282,9 @@ else if (currentMode == "Texto")
     @if (Model.TotalPages > 1)
     {
         <nav class="classified-pagination" aria-label="Paginación de clasificados">
-            <a class="ghost-pill compact @(Model.Page <= 1 ? "is-disabled" : "")" href="/Buscar?group=@currentGroup&mode=Texto&query=@Model.Query&page=@previousPage&pageSize=@Model.PageSize" aria-disabled="@(Model.Page <= 1)">Anterior</a>
+            <a class="ghost-pill compact @(Model.Page <= 1 ? "is-disabled" : "")" href="@BuildSearchUrl(previousPage, Model.PageSize, "Texto")" aria-disabled="@(Model.Page <= 1)">Anterior</a>
             <span class="classified-page-indicator">Página @Model.Page de @Model.TotalPages</span>
-            <a class="ghost-pill compact @(Model.Page >= Model.TotalPages ? "is-disabled" : "")" href="/Buscar?group=@currentGroup&mode=Texto&query=@Model.Query&page=@nextPage&pageSize=@Model.PageSize" aria-disabled="@(Model.Page >= Model.TotalPages)">Siguiente</a>
+            <a class="ghost-pill compact @(Model.Page >= Model.TotalPages ? "is-disabled" : "")" href="@BuildSearchUrl(nextPage, Model.PageSize, "Texto")" aria-disabled="@(Model.Page >= Model.TotalPages)">Siguiente</a>
         </nav>
     }
 }

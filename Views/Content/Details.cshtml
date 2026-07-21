@@ -17,6 +17,7 @@ else
         && Model.CurrentUserId.HasValue
         && publication.UserId.HasValue
         && publication.UserId.Value != Model.CurrentUserId.Value
+        && owner?.AllowsSiteChat == true
         && !publication.IsAnonymous
         && publication.IsActive;
     var canEmail = owner?.RespondsEmails == true || (owner is null && !string.IsNullOrWhiteSpace(publication.ContactEmail));
@@ -96,7 +97,7 @@ else
                     </button>
                 </p>
             }
-            else if (!Model.IsAuthenticated && publication.UserId.HasValue && !publication.IsAnonymous)
+            else if (!Model.IsAuthenticated && publication.UserId.HasValue && owner?.AllowsSiteChat == true && !publication.IsAnonymous)
             {
                 <p>
                     <a class="primary-pill" href="/Account/Login?returnUrl=@Uri.EscapeDataString($"/Publications/Details/{publication.Id}")">

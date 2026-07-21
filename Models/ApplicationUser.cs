@@ -21,6 +21,8 @@ public class ApplicationUser
 
     public bool RespondsWhatsApp { get; set; }
 
+    public bool AllowsSiteChat { get; set; } = true;
+
     [StringLength(40)]
     public string ContactPreference { get; set; } = "CallsWhatsApp";
 

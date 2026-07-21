@@ -8,6 +8,11 @@ public class HomeContentViewModel
     public List<PublicationGroupType> GroupOptions { get; set; } = [];
     public string Mode { get; set; } = "Galeria";
     public string? Query { get; set; }
+    public decimal? PriceFrom { get; set; }
+    public decimal? PriceTo { get; set; }
+    public decimal PriceSliderMax { get; set; } = 1000000m;
+    public List<PublicationCategoryField> RequiredFilterFields { get; set; } = [];
+    public List<PublicationFieldSearchFilter> SelectedFieldFilters { get; set; } = [];
     public string MapTilerKey { get; set; } = string.Empty;
     public string MarkersJson { get; set; } = "[]";
     public List<Publication> Publications { get; set; } = [];

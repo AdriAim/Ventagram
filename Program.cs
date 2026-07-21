@@ -178,6 +178,7 @@ static async Task EnsureUserContactColumnsAsync(VentagramDbContext db)
         await EnsureColumnAsync(connection, "Users", "RespondsEmails", "bit(1) NOT NULL DEFAULT b'0'");
         await EnsureColumnAsync(connection, "Users", "AcceptsCalls", "bit(1) NOT NULL DEFAULT b'0'");
         await EnsureColumnAsync(connection, "Users", "RespondsWhatsApp", "bit(1) NOT NULL DEFAULT b'0'");
+        await EnsureColumnAsync(connection, "Users", "AllowsSiteChat", "bit(1) NOT NULL DEFAULT b'1'");
 
         await using var backfill = connection.CreateCommand();
         backfill.CommandText = """

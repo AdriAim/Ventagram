@@ -18,6 +18,12 @@ public class BrowseModel(IConfiguration configuration, VentagramDbContext db) : 
     public string? Query { get; set; }
 
     [BindProperty(SupportsGet = true)]
+    public decimal? PriceFrom { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public decimal? PriceTo { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public int CurrentPage { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]

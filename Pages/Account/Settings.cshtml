@@ -1,0 +1,60 @@
+@page
+@model Ventagram.Pages.Account.SettingsModel
+@{
+    ViewData["Title"] = "Otras configuraciones";
+}
+
+<section class="form-shell narrow">
+    <div class="section-heading">
+        <span class="eyebrow">Cuenta</span>
+        <h1>Otras configuraciones</h1>
+        <p>Defini que telefono usas como contacto y que canales se muestran en tus publicaciones.</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="status-banner success-banner">@Model.SuccessMessage</div>
+    }
+
+    <form method="post" class="stack-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <label>
+            <span>Telefono de contacto</span>
+            <div class="phone-inline">
+                <select asp-for="Input.PhoneCountry" data-phone-country>
+                    <option value="AR">Argentina</option>
+                    <option value="INT">Internacional</option>
+                </select>
+                <input asp-for="Input.Phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+54 9 1145666454" data-phone-mask="ar" />
+            </div>
+            <span class="field-hint">Argentina: +54 9 1145666454.</span>
+            <span asp-validation-for="Input.Phone" class="text-danger"></span>
+        </label>
+
+        <div class="inline-checks contact-settings-checks">
+            <label class="checkline compact-check">
+                <input asp-for="Input.PublishEmail" />
+                <span>Publicar mi mail</span>
+            </label>
+            <label class="checkline compact-check">
+                <input asp-for="Input.PublishPhone" />
+                <span>Publicar mi telefono</span>
+            </label>
+            <label class="checkline compact-check">
+                <input asp-for="Input.AllowSiteChat" />
+                <span>Permitir chat del sitio</span>
+            </label>
+        </div>
+        <p class="field-hint">Solo se mostraran en tus publicaciones los canales que marques.</p>
+
+        <div class="hero-actions">
+            <button type="submit" class="primary-pill">Guardar configuraciones</button>
+            <a class="ghost-pill" asp-page="/Index">Volver</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

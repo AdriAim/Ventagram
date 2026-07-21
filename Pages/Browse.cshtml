@@ -2,7 +2,42 @@
 @model BrowseModel
 @{
     ViewData["Title"] = "Buscar anuncios";
-    var endpoint = $"/api/content/browse?group={Uri.EscapeDataString(Model.Group)}&mode={Uri.EscapeDataString(Model.Mode)}&query={Uri.EscapeDataString(Model.Query ?? string.Empty)}&page={Model.CurrentPage}&pageSize={Model.PageSize}";
+    var queryParts = new List<string>
+    {
+        $"group={Uri.EscapeDataString(Model.Group)}",
+        $"mode={Uri.EscapeDataString(Model.Mode)}",
+        $"query={Uri.EscapeDataString(Model.Query ?? string.Empty)}",
+        $"page={Model.CurrentPage}",
+        $"pageSize={Model.PageSize}"
+    };
+
+    if (Model.PriceFrom.HasValue)
+    {
+        queryParts.Add($"priceFrom={Uri.EscapeDataString(Model.PriceFrom.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
+    }
+
+    if (Model.PriceTo.HasValue)
+    {
+        queryParts.Add($"priceTo={Uri.EscapeDataString(Model.PriceTo.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
+    }
+
+    var filterFieldIds = Request.Query["filterFieldId"];
+    var filterValues = Request.Query["filterValue"];
+    var filterCount = Math.Max(filterFieldIds.Count, filterValues.Count);
+    for (var i = 0; i < filterCount; i++)
+    {
+        if (i < filterFieldIds.Count)
+        {
+            queryParts.Add($"filterFieldId={Uri.EscapeDataString(filterFieldIds[i] ?? string.Empty)}");
+        }
+
+        if (i < filterValues.Count)
+        {
+            queryParts.Add($"filterValue={Uri.EscapeDataString(filterValues[i] ?? string.Empty)}");
+        }
+    }
+
+    var endpoint = $"/api/content/browse?{string.Join("&", queryParts)}";
 }
 
 <div id="api-page"

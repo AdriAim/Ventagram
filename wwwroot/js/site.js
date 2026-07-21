@@ -58,6 +58,7 @@
     wireFavoriteActions(host);
     wireReportForm();
     wireCreateForm();
+    wireBrowseSearchFilters(host);
     wireChatExperience(host);
     setupMapSelectionLayoutSync(host);
     scrollToSearchPanelIfRequested();
@@ -1645,6 +1646,139 @@
     }
 
     titleInput.value = category || "Nueva publicaciÃ³n";
+  }
+
+  function wireBrowseSearchFilters(root = document) {
+    root.querySelectorAll("[data-price-range-filter]").forEach(wirePriceRangeFilter);
+
+    const form = root.querySelector?.("[data-required-filter-form='true']");
+    if (!form || form.dataset.requiredFiltersBound === "true") return;
+
+    const groupSelect = form.querySelector('select[name="group"]');
+    const endpoint = form.dataset.requiredFilterFieldsEndpoint || "";
+    const panel = form.querySelector("[data-required-filter-panel]");
+    const list = form.querySelector("[data-required-filter-list]");
+    const fieldsScript = form.querySelector("[data-required-filter-fields-json]");
+    form.dataset.requiredFiltersBound = "true";
+
+    let fields = parseRequiredFilterFields(fieldsScript?.textContent);
+
+    const renderFields = () => {
+      if (!panel || !list) return;
+
+      panel.hidden = fields.length === 0;
+      list.innerHTML = fields.map(field => buildRequiredFilterRow(field)).join("");
+    };
+
+    groupSelect?.addEventListener("change", async () => {
+      if (!endpoint) return;
+
+      const response = await fetch(`${endpoint}?group=${encodeURIComponent(groupSelect.value)}`, {
+        headers: { "X-Requested-With": "fetch" }
+      });
+      fields = response.ok ? parseRequiredFilterFields(await response.text()) : [];
+      renderFields();
+    });
+  }
+
+  function wirePriceRangeFilter(wrapper) {
+    if (!wrapper || wrapper.dataset.priceRangeBound === "true") return;
+
+    const max = Number(wrapper.dataset.priceMax || 0) || 100000;
+    const fromRange = wrapper.querySelector("[data-price-from-range]");
+    const toRange = wrapper.querySelector("[data-price-to-range]");
+    const fromValue = wrapper.querySelector("[data-price-from-value]");
+    const toValue = wrapper.querySelector("[data-price-to-value]");
+    const fromLabel = wrapper.querySelector("[data-price-from-label]");
+    const toLabel = wrapper.querySelector("[data-price-to-label]");
+    const fill = wrapper.querySelector("[data-price-range-fill]");
+    if (!fromRange || !toRange || !fromValue || !toValue) return;
+
+    wrapper.dataset.priceRangeBound = "true";
+
+    const formatPrice = value => new Intl.NumberFormat("es-AR", {
+      maximumFractionDigits: 0
+    }).format(Math.max(0, Number(value || 0)));
+
+    const sync = source => {
+      let from = Number(fromRange.value || 0);
+      let to = Number(toRange.value || max);
+
+      if (from > to) {
+        if (source === "from") {
+          to = from;
+          toRange.value = String(to);
+        } else {
+          from = to;
+          fromRange.value = String(from);
+        }
+      }
+
+      fromValue.value = String(from);
+      toValue.value = String(to);
+      if (fromLabel) fromLabel.textContent = formatPrice(from);
+      if (toLabel) toLabel.textContent = formatPrice(to);
+
+      if (fill) {
+        fill.style.left = `${Math.max(0, Math.min(100, (from / max) * 100))}%`;
+        fill.style.right = `${Math.max(0, Math.min(100, 100 - ((to / max) * 100)))}%`;
+      }
+    };
+
+    fromRange.addEventListener("input", () => sync("from"));
+    toRange.addEventListener("input", () => sync("to"));
+    sync();
+  }
+
+  function buildRequiredFilterRow(field) {
+    return `
+      <label data-required-filter-row>
+        <span>${escapeHtml(field.label || "")}</span>
+        <input type="hidden" name="filterFieldId" value="${escapeAttribute(field.id)}" />
+        ${buildRequiredFilterControl(field)}
+      </label>
+    `;
+  }
+
+  function buildRequiredFilterControl(field) {
+    if (field.dataType === "lista" && Array.isArray(field.options) && field.options.length) {
+      const options = field.options
+        .map(option => `<option value="${escapeAttribute(option)}">${escapeHtml(option)}</option>`)
+        .join("");
+      return `<select name="filterValue"><option value="">Todos</option>${options}</select>`;
+    }
+
+    if (field.dataType === "booleano") {
+      return `
+        <select name="filterValue">
+          <option value="">Todos</option>
+          <option value="true">Si</option>
+          <option value="false">No</option>
+        </select>
+      `;
+    }
+
+    const type = field.dataType === "numero" ? "number" : "text";
+    const step = field.dataType === "numero" ? ` step="0.01"` : "";
+    return `<input name="filterValue" type="${type}"${step} placeholder="Todos" />`;
+  }
+
+  function parseRequiredFilterFields(raw) {
+    if (!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.map(field => ({
+          id: Number(field.id || 0),
+          label: String(field.label || ""),
+          dataType: String(field.dataType || "texto").toLowerCase(),
+          options: Array.isArray(field.options) ? field.options.map(option => String(option || "")).filter(Boolean) : []
+        })).filter(field => field.id > 0 && field.label)
+        : [];
+    } catch {
+      return [];
+    }
   }
 
   function buildMapGalleryPopup(marker) {

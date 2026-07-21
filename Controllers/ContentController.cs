@@ -17,6 +17,7 @@ public class ContentController(
     PublicationService publicationService,
     PublicationGroupTypeService publicationGroupTypeService,
     PublicationCategoryService publicationCategoryService,
+    PublicationCategoryFieldService publicationCategoryFieldService,
     ReportService reportService,
     FavoriteService favoriteService,
     CloudflareR2ImageStorageService imageStorageService,
@@ -29,7 +30,7 @@ public class ContentController(
     private const int MaxMapPublications = 250;
 
     [HttpGet("home")]
-    public async Task<IActionResult> Home([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    public async Task<IActionResult> Home([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] decimal? priceFrom = null, [FromQuery] decimal? priceTo = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         var selectedGroup = ParseGroupFilter(group);
         var selectedGroupName = selectedGroup?.ToDisplayName() ?? "Todos";
@@ -44,10 +45,15 @@ public class ContentController(
         var userLocalityLongitude = effectiveLocality?.Longitude;
         var favoritePublicationIds = new HashSet<int>();
         var favoriteLists = new List<FavoriteListSummaryViewModel>();
+        var filters = BuildSearchFilters(priceFrom, priceTo, Request.Query);
+        var priceSliderMax = NormalizePriceSliderMax(await publicationService.GetActiveMaxPriceAsync(selectedGroup), filters);
+        List<PublicationCategoryField> requiredFields = selectedGroup is null
+            ? []
+            : await publicationCategoryFieldService.GetRequiredActiveByGroupAsync(selectedGroup.Value);
 
         if (selectedMode == "Texto")
         {
-            totalResults = await publicationService.CountActivePublicationsAsync(selectedGroup, query);
+            totalResults = await publicationService.CountActivePublicationsAsync(selectedGroup, query, filters);
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalResults / (double)safePageSize));
             safePage = Math.Min(safePage, totalPages);
             publications = await publicationService.SearchActivePublicationsPageAsync(
@@ -56,7 +62,8 @@ public class ContentController(
                 (safePage - 1) * safePageSize,
                 safePageSize,
                 userLocalityLatitude,
-                userLocalityLongitude);
+                userLocalityLongitude,
+                filters);
         }
         else if (selectedMode == "Mapa")
         {
@@ -64,7 +71,8 @@ public class ContentController(
                 selectedGroup,
                 query,
                 userLocalityLatitude,
-                userLocalityLongitude);
+                userLocalityLongitude,
+                filters);
             totalResults = publications.Count;
             publications = LimitMapPublications(publications, MaxMapPublications);
         }
@@ -84,6 +92,11 @@ public class ContentController(
             GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
             Mode = selectedMode,
             Query = query,
+            PriceFrom = filters.PriceFrom,
+            PriceTo = filters.PriceTo,
+            PriceSliderMax = priceSliderMax,
+            RequiredFilterFields = requiredFields,
+            SelectedFieldFilters = filters.FieldFilters,
             Publications = publications,
             Page = safePage,
             PageSize = safePageSize,
@@ -97,7 +110,7 @@ public class ContentController(
             FavoriteLists = favoriteLists,
             MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
             FlashMessage = flash,
-            GalleryApiEndpoint = $"/api/content/gallery-items?group={Uri.EscapeDataString(selectedGroupName)}&query={Uri.EscapeDataString(query ?? string.Empty)}",
+            GalleryApiEndpoint = BuildGalleryApiEndpoint(selectedGroupName, query, filters),
             MarkersJson = JsonSerializer.Serialize(publications
                 .Where(x => x.Latitude.HasValue && x.Longitude.HasValue)
                 .Select(x => new
@@ -119,7 +132,7 @@ public class ContentController(
     }
 
     [HttpGet("browse")]
-    public async Task<IActionResult> Browse([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    public async Task<IActionResult> Browse([FromQuery] string? group = "Inmuebles", [FromQuery] string? mode = "Galeria", [FromQuery] string? query = null, [FromQuery] string? flash = null, [FromQuery] decimal? priceFrom = null, [FromQuery] decimal? priceTo = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         var selectedGroup = ParseGroupFilter(group);
         var selectedGroupName = selectedGroup?.ToDisplayName() ?? "Todos";
@@ -134,10 +147,15 @@ public class ContentController(
         var userLocalityLongitude = effectiveLocality?.Longitude;
         var favoritePublicationIds = new HashSet<int>();
         var favoriteLists = new List<FavoriteListSummaryViewModel>();
+        var filters = BuildSearchFilters(priceFrom, priceTo, Request.Query);
+        var priceSliderMax = NormalizePriceSliderMax(await publicationService.GetActiveMaxPriceAsync(selectedGroup), filters);
+        List<PublicationCategoryField> requiredFields = selectedGroup is null
+            ? []
+            : await publicationCategoryFieldService.GetRequiredActiveByGroupAsync(selectedGroup.Value);
 
         if (selectedMode == "Texto")
         {
-            totalResults = await publicationService.CountActivePublicationsAsync(selectedGroup, query);
+            totalResults = await publicationService.CountActivePublicationsAsync(selectedGroup, query, filters);
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalResults / (double)safePageSize));
             safePage = Math.Min(safePage, totalPages);
             publications = await publicationService.SearchActivePublicationsPageAsync(
@@ -146,7 +164,8 @@ public class ContentController(
                 (safePage - 1) * safePageSize,
                 safePageSize,
                 userLocalityLatitude,
-                userLocalityLongitude);
+                userLocalityLongitude,
+                filters);
         }
         else if (selectedMode == "Mapa")
         {
@@ -154,7 +173,8 @@ public class ContentController(
                 selectedGroup,
                 query,
                 userLocalityLatitude,
-                userLocalityLongitude);
+                userLocalityLongitude,
+                filters);
             totalResults = publications.Count;
             publications = LimitMapPublications(publications, MaxMapPublications);
         }
@@ -174,6 +194,11 @@ public class ContentController(
             GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
             Mode = selectedMode,
             Query = query,
+            PriceFrom = filters.PriceFrom,
+            PriceTo = filters.PriceTo,
+            PriceSliderMax = priceSliderMax,
+            RequiredFilterFields = requiredFields,
+            SelectedFieldFilters = filters.FieldFilters,
             Publications = publications,
             Page = safePage,
             PageSize = safePageSize,
@@ -187,7 +212,7 @@ public class ContentController(
             FavoriteLists = favoriteLists,
             MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
             FlashMessage = flash,
-            GalleryApiEndpoint = $"/api/content/gallery-items?group={Uri.EscapeDataString(selectedGroupName)}&query={Uri.EscapeDataString(query ?? string.Empty)}",
+            GalleryApiEndpoint = BuildGalleryApiEndpoint(selectedGroupName, query, filters),
             MarkersJson = JsonSerializer.Serialize(publications
                 .Where(x => x.Latitude.HasValue && x.Longitude.HasValue)
                 .Select(x => new
@@ -209,19 +234,21 @@ public class ContentController(
     }
 
     [HttpGet("gallery-items")]
-    public async Task<IActionResult> GalleryItems([FromQuery] string? group = "Inmuebles", [FromQuery] string? query = null, [FromQuery] int offset = 0, [FromQuery] int limit = 20)
+    public async Task<IActionResult> GalleryItems([FromQuery] string? group = "Inmuebles", [FromQuery] string? query = null, [FromQuery] decimal? priceFrom = null, [FromQuery] decimal? priceTo = null, [FromQuery] int offset = 0, [FromQuery] int limit = 20)
     {
         var effectiveLocality = await navigationLocalityService.GetEffectiveLocalityAsync(HttpContext);
         var selectedGroup = ParseGroupFilter(group);
         var safeOffset = Math.Max(0, offset);
         var safeLimit = Math.Clamp(limit, 1, 60);
+        var filters = BuildSearchFilters(priceFrom, priceTo, Request.Query);
         var items = await publicationService.SearchActivePublicationsPageAsync(
             selectedGroup,
             query,
             safeOffset,
             safeLimit + 1,
             effectiveLocality?.Latitude,
-            effectiveLocality?.Longitude);
+            effectiveLocality?.Longitude,
+            filters);
         var hasMore = items.Count > safeLimit;
         var payloadItems = items.Take(safeLimit).ToList();
         var favoritePublicationIds = currentUserAccessor.UserId is int currentUserId
@@ -387,6 +414,29 @@ public class ContentController(
         {
             id = x.Id,
             name = x.Name
+        }));
+    }
+
+    [HttpGet("required-filter-fields")]
+    public async Task<IActionResult> RequiredFilterFields([FromQuery] string? group = null)
+    {
+        var selectedGroup = ParseGroupFilter(group);
+        if (selectedGroup is null)
+        {
+            return Ok(Array.Empty<object>());
+        }
+
+        var fields = await publicationCategoryFieldService.GetRequiredActiveByGroupAsync(selectedGroup.Value);
+        return Ok(fields.Select(x => new
+        {
+            id = x.Id,
+            label = x.Label,
+            internalName = x.InternalName,
+            dataType = SplitCsvOptions(x.OptionsCsv).Length > 0
+                ? PublicationCategoryFieldDataType.Lista.ToString().ToLowerInvariant()
+                : x.DataType.ToString().ToLowerInvariant(),
+            required = x.Required,
+            options = SplitCsvOptions(x.OptionsCsv)
         }));
     }
 
@@ -679,6 +729,92 @@ public class ContentController(
     private static string NormalizeCurrency(string? currency)
     {
         return string.Equals(currency, "ARS", StringComparison.OrdinalIgnoreCase) ? "ARS" : "USD";
+    }
+
+    private static PublicationSearchFilters BuildSearchFilters(decimal? priceFrom, decimal? priceTo, IQueryCollection query)
+    {
+        var filters = new PublicationSearchFilters
+        {
+            PriceFrom = priceFrom is >= 0 ? priceFrom : null,
+            PriceTo = priceTo is >= 0 ? priceTo : null
+        };
+
+        var fieldIds = query["filterFieldId"];
+        var values = query["filterValue"];
+        var count = Math.Max(fieldIds.Count, values.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var rawFieldId = i < fieldIds.Count ? fieldIds[i] : null;
+            var rawValue = i < values.Count ? values[i] : null;
+            if (!int.TryParse(rawFieldId, out var fieldId) || fieldId <= 0 || string.IsNullOrWhiteSpace(rawValue))
+            {
+                continue;
+            }
+
+            filters.FieldFilters.Add(new PublicationFieldSearchFilter
+            {
+                FieldId = fieldId,
+                Value = rawValue.Trim()
+            });
+        }
+
+        return filters;
+    }
+
+    private static decimal NormalizePriceSliderMax(decimal activeMaxPrice, PublicationSearchFilters filters)
+    {
+        var effectiveMax = new[]
+        {
+            activeMaxPrice,
+            filters.PriceFrom ?? 0m,
+            filters.PriceTo ?? 0m,
+            100000m
+        }.Max();
+
+        return Math.Ceiling(effectiveMax / 10000m) * 10000m;
+    }
+
+    private static string BuildGalleryApiEndpoint(string group, string? query, PublicationSearchFilters filters)
+    {
+        var parts = new List<string>
+        {
+            $"group={Uri.EscapeDataString(group)}",
+            $"query={Uri.EscapeDataString(query ?? string.Empty)}"
+        };
+
+        AddFilterQueryParts(parts, filters);
+        return $"/api/content/gallery-items?{string.Join("&", parts)}";
+    }
+
+    private static void AddFilterQueryParts(List<string> parts, PublicationSearchFilters filters)
+    {
+        if (filters.PriceFrom is decimal priceFrom)
+        {
+            parts.Add($"priceFrom={Uri.EscapeDataString(priceFrom.ToString(CultureInfo.InvariantCulture))}");
+        }
+
+        if (filters.PriceTo is decimal priceTo)
+        {
+            parts.Add($"priceTo={Uri.EscapeDataString(priceTo.ToString(CultureInfo.InvariantCulture))}");
+        }
+
+        foreach (var filter in filters.FieldFilters)
+        {
+            if (filter.FieldId <= 0 || string.IsNullOrWhiteSpace(filter.Value))
+            {
+                continue;
+            }
+
+            parts.Add($"filterFieldId={filter.FieldId.ToString(CultureInfo.InvariantCulture)}");
+            parts.Add($"filterValue={Uri.EscapeDataString(filter.Value)}");
+        }
+    }
+
+    private static string[] SplitCsvOptions(string? optionsCsv)
+    {
+        return string.IsNullOrWhiteSpace(optionsCsv)
+            ? []
+            : optionsCsv.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private static string BuildPublicationTitle(string? categoryName, string? locality)

@@ -7,22 +7,54 @@ namespace Ventagram.Services;
 public class PublicationService(VentagramDbContext db)
 {
     public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query)
-        => BuildActiveSearchQuery(group, query).ToListAsync();
+        => SearchActivePublicationsAsync(group, query, null);
+
+    public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query, PublicationSearchFilters? filters)
+        => BuildActiveSearchQuery(group, query, filters).ToListAsync();
 
     public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query, double? referenceLatitude, double? referenceLongitude)
-        => BuildOrderedActiveSearchQuery(group, query, referenceLatitude, referenceLongitude).ToListAsync();
+        => SearchActivePublicationsAsync(group, query, referenceLatitude, referenceLongitude, null);
+
+    public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query, double? referenceLatitude, double? referenceLongitude, PublicationSearchFilters? filters)
+        => BuildOrderedActiveSearchQuery(group, query, referenceLatitude, referenceLongitude, filters).ToListAsync();
 
     public Task<int> CountActivePublicationsAsync(PublicationGroup? group, string? query)
-        => BuildActiveSearchQuery(group, query).CountAsync();
+        => CountActivePublicationsAsync(group, query, null);
+
+    public Task<int> CountActivePublicationsAsync(PublicationGroup? group, string? query, PublicationSearchFilters? filters)
+        => BuildActiveSearchQuery(group, query, filters).CountAsync();
+
+    public async Task<decimal> GetActiveMaxPriceAsync(PublicationGroup? group)
+    {
+        var now = DateTime.UtcNow;
+        var items = db.Publications
+            .AsNoTracking()
+            .Where(x => x.IsActive && (x.ExpiresAtUtc == null || x.ExpiresAtUtc > now));
+
+        if (group is not null)
+        {
+            items = items.Where(x => x.Group == group.Value);
+        }
+
+        return await items.AnyAsync()
+            ? await items.MaxAsync(x => x.Price)
+            : 1000000m;
+    }
 
     public Task<List<Publication>> SearchActivePublicationsPageAsync(PublicationGroup? group, string? query, int skip, int take)
-        => BuildActiveSearchQuery(group, query)
+        => SearchActivePublicationsPageAsync(group, query, skip, take, null);
+
+    public Task<List<Publication>> SearchActivePublicationsPageAsync(PublicationGroup? group, string? query, int skip, int take, PublicationSearchFilters? filters)
+        => BuildActiveSearchQuery(group, query, filters)
             .Skip(Math.Max(0, skip))
             .Take(Math.Max(1, take))
             .ToListAsync();
 
     public Task<List<Publication>> SearchActivePublicationsPageAsync(PublicationGroup? group, string? query, int skip, int take, double? referenceLatitude, double? referenceLongitude)
-        => BuildOrderedActiveSearchQuery(group, query, referenceLatitude, referenceLongitude)
+        => SearchActivePublicationsPageAsync(group, query, skip, take, referenceLatitude, referenceLongitude, null);
+
+    public Task<List<Publication>> SearchActivePublicationsPageAsync(PublicationGroup? group, string? query, int skip, int take, double? referenceLatitude, double? referenceLongitude, PublicationSearchFilters? filters)
+        => BuildOrderedActiveSearchQuery(group, query, referenceLatitude, referenceLongitude, filters)
             .Skip(Math.Max(0, skip))
             .Take(Math.Max(1, take))
             .ToListAsync();
@@ -198,7 +230,7 @@ public class PublicationService(VentagramDbContext db)
         return true;
     }
 
-    private IQueryable<Publication> BuildActiveSearchQuery(PublicationGroup? group, string? query)
+    private IQueryable<Publication> BuildActiveSearchQuery(PublicationGroup? group, string? query, PublicationSearchFilters? filters = null)
     {
         var now = DateTime.UtcNow;
         var items = db.Publications
@@ -223,6 +255,8 @@ public class PublicationService(VentagramDbContext db)
                 x.FieldValues.Any(v => v.ValueText != null && EF.Functions.Like(v.ValueText, term)));
         }
 
+        items = ApplySearchFilters(items, filters);
+
         return items
             .OrderByDescending(x => x.Featured)
             .ThenByDescending(x => x.CreatedAtUtc);
@@ -232,9 +266,10 @@ public class PublicationService(VentagramDbContext db)
         PublicationGroup? group,
         string? query,
         double? referenceLatitude,
-        double? referenceLongitude)
+        double? referenceLongitude,
+        PublicationSearchFilters? filters = null)
     {
-        var items = BuildActiveSearchQuery(group, query);
+        var items = BuildActiveSearchQuery(group, query, filters);
         if (referenceLatitude is null || referenceLongitude is null)
         {
             return items;
@@ -251,6 +286,63 @@ public class PublicationService(VentagramDbContext db)
                 : double.MaxValue)
             .ThenByDescending(x => x.Featured)
             .ThenByDescending(x => x.CreatedAtUtc);
+    }
+
+    private IQueryable<Publication> ApplySearchFilters(IQueryable<Publication> items, PublicationSearchFilters? filters)
+    {
+        if (filters is null)
+        {
+            return items;
+        }
+
+        if (filters.PriceFrom is decimal priceFrom)
+        {
+            items = items.Where(x => x.Price >= priceFrom);
+        }
+
+        if (filters.PriceTo is decimal priceTo)
+        {
+            items = items.Where(x => x.Price <= priceTo);
+        }
+
+        foreach (var fieldFilter in filters.FieldFilters)
+        {
+            var fieldId = fieldFilter.FieldId;
+            var rawValue = fieldFilter.Value?.Trim();
+            if (fieldId <= 0 || string.IsNullOrWhiteSpace(rawValue))
+            {
+                continue;
+            }
+
+            var textTerm = $"%{rawValue}%";
+            var hasNumber = decimal.TryParse(rawValue, out var numberValue);
+            var hasBoolean = bool.TryParse(rawValue, out var booleanValue);
+
+            if (hasNumber)
+            {
+                items = items.Where(x => x.FieldValues.Any(v =>
+                    v.CategoryFieldId == fieldId &&
+                    ((v.ValueText != null && EF.Functions.Like(v.ValueText, textTerm)) ||
+                     (v.ValueNumber.HasValue && v.ValueNumber.Value == numberValue))));
+                continue;
+            }
+
+            if (hasBoolean)
+            {
+                items = items.Where(x => x.FieldValues.Any(v =>
+                    v.CategoryFieldId == fieldId &&
+                    ((v.ValueText != null && EF.Functions.Like(v.ValueText, textTerm)) ||
+                     (v.ValueBoolean.HasValue && v.ValueBoolean.Value == booleanValue))));
+                continue;
+            }
+
+            items = items.Where(x => x.FieldValues.Any(v =>
+                v.CategoryFieldId == fieldId &&
+                v.ValueText != null &&
+                EF.Functions.Like(v.ValueText, textTerm)));
+        }
+
+        return items;
     }
 
     private static List<PublicationFieldValue> BuildDynamicFieldValues(
