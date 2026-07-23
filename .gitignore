@@ -4,6 +4,7 @@ obj/
 _buildcheck*/
 artifacts/buildcheck*/
 artifacts/buildcheck-*/
+.codex-build/
 
 *.user
 *.suo

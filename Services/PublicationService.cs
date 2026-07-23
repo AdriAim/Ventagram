@@ -86,6 +86,28 @@ public class PublicationService(VentagramDbContext db)
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
+    public async Task<List<Publication>> GetOwnedPublicationsAsync(int userId)
+    {
+        return await db.Publications
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Include(x => x.MediaItems)
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.IsActive)
+            .ThenByDescending(x => x.CreatedAtUtc)
+            .ToListAsync();
+    }
+
+    public async Task<Publication?> GetOwnedByIdAsync(int publicationId, int userId)
+    {
+        return await db.Publications
+            .Include(x => x.Category)
+            .Include(x => x.MediaItems)
+            .Include(x => x.FieldValues)
+                .ThenInclude(x => x.CategoryField)
+            .FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId);
+    }
+
     public async Task<List<Publication>> GetReportedPublicationsAsync()
     {
         return await db.Publications
@@ -226,6 +248,93 @@ public class PublicationService(VentagramDbContext db)
 
         publication.IsActive = false;
         publication.Status = "Baja solicitada";
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeactivateOwnedAsync(int publicationId, int userId)
+    {
+        var publication = await db.Publications.FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId && x.IsActive);
+        if (publication is null)
+        {
+            return false;
+        }
+
+        publication.IsActive = false;
+        publication.Status = "Baja solicitada";
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateOwnedAsync(
+        int publicationId,
+        int userId,
+        PublicationCreateRequest input)
+    {
+        var publication = await db.Publications
+            .Include(x => x.MediaItems)
+            .Include(x => x.FieldValues)
+            .FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId && x.IsActive);
+        if (publication is null)
+        {
+            return false;
+        }
+
+        var normalizedLocality = input.NoLocation ? string.Empty : input.Locality.Trim();
+        var localityChanged = !string.Equals((publication.Locality ?? string.Empty).Trim(), normalizedLocality, StringComparison.Ordinal);
+        var category = await db.PublicationCategories
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == input.CategoryId);
+        var categoryFields = await db.PublicationCategoryFields
+            .Where(x => x.IsActive
+                && (x.GroupId == (byte)category.Group || x.GroupId == null)
+                && (x.CategoryId == input.CategoryId || x.CategoryId == null))
+            .OrderBy(x => x.CategoryId == null ? 0 : 1)
+            .ThenBy(x => x.SortOrder)
+            .ThenBy(x => x.Id)
+            .ToListAsync();
+
+        publication.Group = input.Group;
+        publication.CategoryId = input.CategoryId;
+        publication.Title = input.Title.Trim();
+        publication.Price = input.Price;
+        publication.Currency = input.Currency;
+        publication.Locality = normalizedLocality;
+        publication.ShortDescription = input.ShortDescription.Trim();
+        publication.LongDescription = input.LongDescription?.Trim();
+        publication.Featured = input.Featured;
+        publication.InternalNotes = input.InternalNotes;
+
+        if (input.NoLocation)
+        {
+            publication.Latitude = null;
+            publication.Longitude = null;
+        }
+        else if (localityChanged)
+        {
+            publication.Latitude = null;
+            publication.Longitude = null;
+        }
+        else
+        {
+            publication.Latitude = input.Latitude;
+            publication.Longitude = input.Longitude;
+        }
+
+        db.RemoveRange(publication.MediaItems);
+        publication.MediaItems.Clear();
+        publication.MediaItems.AddRange(PublicationMediaBuilder.Build(
+            input.ImagesCsv,
+            input.VideoUrl,
+            publication.CreatedAtUtc));
+
+        db.RemoveRange(publication.FieldValues);
+        publication.FieldValues.Clear();
+        foreach (var fieldValue in BuildDynamicFieldValues(input, categoryFields))
+        {
+            publication.FieldValues.Add(fieldValue);
+        }
+
         await db.SaveChangesAsync();
         return true;
     }

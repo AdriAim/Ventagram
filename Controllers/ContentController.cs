@@ -404,6 +404,98 @@ public class ContentController(
         return PartialView("~/Views/Content/Create.cshtml", model);
     }
 
+    [HttpGet("edit/{id:int}")]
+    public async Task<IActionResult> Edit(int id)
+    {
+        if (!currentUserAccessor.IsAuthenticated || currentUserAccessor.UserId is not int userId)
+        {
+            return Unauthorized();
+        }
+
+        var user = await LoadCurrentUserAsync();
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
+        var publication = await publicationService.GetOwnedByIdAsync(id, userId);
+        if (publication is null)
+        {
+            return NotFound();
+        }
+
+        var categories = await publicationCategoryService.GetActiveByGroupAsync(publication.Group);
+        var input = new PublicationCreateRequest
+        {
+            Group = publication.Group,
+            CategoryId = publication.CategoryId,
+            Title = publication.Title,
+            Price = publication.Price,
+            Currency = publication.Currency,
+            Locality = publication.Locality,
+            ShortDescription = publication.ShortDescription,
+            LongDescription = publication.LongDescription,
+            ImagesCsv = string.Join(",", publication.ImageList),
+            VideoUrl = publication.PrimaryVideoUrl,
+            ContactName = publication.ContactName,
+            ContactPhone = publication.ContactPhone,
+            ContactEmail = publication.ContactEmail,
+            Featured = publication.Featured,
+            InternalNotes = publication.InternalNotes,
+            Latitude = publication.Latitude,
+            Longitude = publication.Longitude,
+            NoLocation = !publication.Latitude.HasValue || !publication.Longitude.HasValue,
+            DynamicFields = publication.FieldValues
+                .Select(x => new PublicationDynamicFieldInput
+                {
+                    FieldId = x.CategoryFieldId,
+                    ValueText = x.ValueText,
+                    ValueNumber = x.ValueNumber,
+                    ValueBoolean = x.ValueBoolean
+                })
+                .ToList()
+        };
+
+        var hasTechnicalValues = publication.FieldValues.Any(x =>
+            x.CategoryField is not null
+            && !(x.CategoryField.ShowInBasicData || x.CategoryField.Required)
+            && (x.ValueBoolean.HasValue || x.ValueNumber.HasValue || !string.IsNullOrWhiteSpace(x.ValueText)));
+
+        var model = new CreatePublicationContentViewModel
+        {
+            Input = input,
+            GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
+            Categories = categories,
+            IsAuthenticated = true,
+            RequiresLogin = false,
+            CurrentUserName = user.Name,
+            CurrentUserEmail = user.Email,
+            CurrentUserPhone = user.Phone,
+            SuggestedLocalityLabel = string.IsNullOrWhiteSpace(publication.Locality) ? null : publication.Locality,
+            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            FormEyebrow = "Mis publicaciones",
+            FormTitle = "Editar publicacion",
+            FormDescription = "Modifica los mismos datos que usas al crear un anuncio, incluyendo imagenes, video, ubicacion y ficha tecnica.",
+            SubmitButtonText = "Guardar cambios",
+            CancelUrl = "/MisPublicaciones",
+            SubmitEndpoint = $"/api/content/edit/{publication.Id}",
+            ShowLocationSection = publication.Latitude.HasValue && publication.Longitude.HasValue,
+            ShowTechnicalSection = hasTechnicalValues,
+            InitialDynamicFieldValues = publication.FieldValues
+                .Select(x => new CreatePublicationDynamicFieldValueSeed
+                {
+                    InternalName = x.CategoryField?.InternalName ?? string.Empty,
+                    Value = x.ValueBoolean.HasValue
+                        ? x.ValueBoolean.Value.ToString().ToLowerInvariant()
+                        : x.ValueNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? x.ValueText ?? string.Empty
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.InternalName))
+                .ToList()
+        };
+
+        return PartialView("~/Views/Content/Create.cshtml", model);
+    }
+
     [HttpGet("categories")]
     public async Task<IActionResult> Categories([FromQuery] string? group = null)
     {
@@ -512,6 +604,73 @@ public class ContentController(
         {
             message = "Publicacion creada.",
             redirectUrl = $"/Publications/Details/{result.Publication.Id}"
+        });
+    }
+
+    [HttpPost("edit/{id:int}")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> EditPost(int id, [FromBody] CreatePublicationApiRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new
+            {
+                message = "Revisa los datos del formulario.",
+                errors = ModelStateToFieldErrors(ModelState)
+            });
+        }
+
+        if (!currentUserAccessor.IsAuthenticated || currentUserAccessor.UserId is not int userId)
+        {
+            return Unauthorized(new { message = "Tenes que iniciar sesion para editar." });
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(x => x.Id == userId);
+        if (user is null)
+        {
+            return Unauthorized(new { message = "No se encontro el usuario autenticado." });
+        }
+
+        var publication = await publicationService.GetOwnedByIdAsync(id, userId);
+        if (publication is null)
+        {
+            return NotFound(new { message = "La publicacion no existe o no te pertenece." });
+        }
+
+        request.Currency = NormalizeCurrency(request.Currency);
+        if (request.NoLocation)
+        {
+            request.Latitude = null;
+            request.Longitude = null;
+            request.Locality = string.Empty;
+            request.Address = null;
+        }
+
+        request.ContactName = user.Name;
+        request.ContactPhone = user.Phone;
+        request.ContactEmail = user.Email;
+        request.PublisherMode = "Account";
+        request.VideoUrl = string.IsNullOrWhiteSpace(request.VideoUrl) ? null : request.VideoUrl.Trim();
+
+        var category = await publicationCategoryService.GetActiveByIdAsync(request.CategoryId);
+        request.Title = BuildPublicationTitle(category?.Name, request.Locality);
+
+        var errors = await ValidateCreateRequestAsync(request);
+        if (errors.Count > 0)
+        {
+            return BadRequest(new { message = "Revisa los datos del formulario.", errors });
+        }
+
+        var updated = await publicationService.UpdateOwnedAsync(id, userId, request);
+        if (!updated)
+        {
+            return BadRequest(new { message = "No se pudo actualizar la publicacion." });
+        }
+
+        return Ok(new
+        {
+            message = "Publicacion actualizada.",
+            redirectUrl = $"/Publications/Details/{id}"
         });
     }
 

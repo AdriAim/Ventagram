@@ -2306,7 +2306,8 @@
         return;
       }
 
-      const response = await fetch("/api/content/create", {
+      const submitEndpoint = form.dataset.submitEndpoint || "/api/content/create";
+      const response = await fetch(submitEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3172,6 +3173,22 @@
     const state = [];
     let uploadChain = Promise.resolve();
 
+    const seedExistingImages = () => {
+      const existingUrls = String(imagesCsvInput?.value || "")
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+
+      existingUrls.forEach(url => {
+        state.push({
+          id: createClientId(),
+          file: { name: "Imagen actual" },
+          previewUrl: url,
+          uploadedUrl: url
+        });
+      });
+    };
+
     const updateHiddenValue = () => {
       if (imagesCsvInput) {
         imagesCsvInput.value = state
@@ -3198,9 +3215,8 @@
         <article class="upload-preview ${index === 0 ? "main" : ""}">
           <img src="${escapeAttribute(item.previewUrl)}" alt="${escapeAttribute(item.file.name)}" />
           <span class="gallery-badge">${index === 0 ? "Principal" : `#${index + 1}`}</span>
-          <span class="upload-status">${item.uploadedUrl ? "Listo" : "Subiendoâ€¦"}</span>
-          <button type="button" class="gallery-nav gallery-nav-prev upload-action" data-upload-action="primary" data-upload-id="${item.id}" aria-label="Marcar como principal">â˜…</button>
-          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-upload-action="remove" data-upload-id="${item.id}" aria-label="Quitar imagen">Ã—</button>
+          <span class="upload-status">${item.uploadedUrl ? "Listo" : "Subiendo..."}</span>
+          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-upload-action="remove" data-upload-id="${item.id}" aria-label="Quitar imagen">&times;</button>
         </article>
       `).join("");
 
@@ -3270,14 +3286,6 @@
       render();
     };
 
-    const makePrimary = id => {
-      const index = state.findIndex(item => item.id === id);
-      if (index <= 0) return;
-      const [item] = state.splice(index, 1);
-      state.unshift(item);
-      render();
-    };
-
     pickButton?.addEventListener("click", event => {
       event.preventDefault();
       input?.click();
@@ -3330,11 +3338,10 @@
 
       if (button.getAttribute("data-upload-action") === "remove") {
         removeById(id);
-      } else if (button.getAttribute("data-upload-action") === "primary") {
-        makePrimary(id);
       }
     });
 
+    seedExistingImages();
     render();
 
     return {
@@ -3355,6 +3362,18 @@
 
     let state = null;
     let uploadChain = Promise.resolve();
+
+    const seedExistingVideo = () => {
+      const existingUrl = String(videoUrlInput?.value || "").trim();
+      if (!existingUrl) return;
+
+      state = {
+        id: createClientId(),
+        file: { name: "Video actual" },
+        previewUrl: existingUrl,
+        uploadedUrl: existingUrl
+      };
+    };
 
     const updateHiddenValue = () => {
       if (videoUrlInput) {
@@ -3382,7 +3401,7 @@
           <video src="${escapeAttribute(state.previewUrl)}" preload="metadata" muted playsinline controls></video>
           <span class="gallery-badge">Video principal</span>
           <span class="upload-status">${state.uploadedUrl ? "Listo" : "Subiendo..."}</span>
-          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-video-action="remove" aria-label="Quitar video">Ã—</button>
+          <button type="button" class="gallery-nav gallery-nav-next upload-action" data-video-action="remove" aria-label="Quitar video">&times;</button>
         </article>
       `;
 
@@ -3517,6 +3536,7 @@
       clearState();
     });
 
+    seedExistingVideo();
     render();
 
     return {

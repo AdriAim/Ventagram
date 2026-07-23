@@ -64,37 +64,6 @@
                     </a>
                 </div>
                 <div class="site-nav-divider" aria-hidden="true"></div>
-                <div class="header-locality-bar" data-header-locality-form>
-                    <div class="header-locality-main">
-                        <span class="header-locality-selected">
-                            <i class="fa-solid fa-location-dot"></i>
-                            <span data-header-locality-current>
-                                @(string.IsNullOrWhiteSpace(currentHeaderLocality) ? "Sin localidad" : $"Anuncios cerca de {currentHeaderLocality}")
-                            </span>
-                        </span>
-                        <input type="text"
-                               class="header-locality-input"
-                               list="header-locality-options"
-                               value=""
-                               placeholder="buscar localidad"
-                               aria-label="Localidad para buscar"
-                               data-header-locality-input />
-                        <button type="button" class="header-locality-action" data-header-locality-detect>Detectar</button>
-                    </div>
-                    <datalist id="header-locality-options">
-                        @foreach (var locality in availableHeaderLocalities)
-                        {
-                            var optionLabel = $"{locality.Locality}, {locality.Province}";
-                            <option value="@optionLabel"
-                                    data-locality-id="@locality.Id"
-                                    data-locality="@locality.Locality"
-                                    data-province="@locality.Province"
-                                    data-latitude="@locality.Latitude"
-                                    data-longitude="@locality.Longitude"></option>
-                        }
-                    </datalist>
-                    <span class="header-locality-status" data-header-locality-status></span>
-                </div>
                 <div class="nav-links">
                     <a class="nav-main-link" href="/Buscar#search-panel">
                         <i class="fa-solid fa-compass fa-fw" aria-hidden="true"></i>
@@ -123,11 +92,15 @@
                         <span class="mailbox-count" data-chat-unread-count hidden>0</span>
                     </a>
                     <details class="user-menu">
-                        <summary class="user-menu-toggle">
+                        <summary class="user-menu-toggle" title="Hace click para ver configuración del usuario y sus publicaciones">
                             <span class="user-badge">@User.Identity!.Name</span>
                             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                         </summary>
                         <div class="user-menu-panel">
+                            <a asp-page="/MyPublications">
+                                <i class="fa-solid fa-rectangle-list" aria-hidden="true"></i>
+                                <span>Mis publicaciones</span>
+                            </a>
                             <a asp-page="/Favorites">
                                 <i class="fa-solid fa-star" aria-hidden="true"></i>
                                 <span>Favoritos</span>
@@ -158,6 +131,37 @@
                     <a class="ghost-pill compact" asp-page="/Account/Login">Ingresar</a>
                     <a class="primary-pill compact" asp-page="/Account/Register">Crear cuenta</a>
                 }
+            </div>
+            <div class="header-locality-bar" data-header-locality-form>
+                <div class="header-locality-main">
+                    <span class="header-locality-selected">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span data-header-locality-current>
+                            @(string.IsNullOrWhiteSpace(currentHeaderLocality) ? "Sin localidad" : $"Anuncios cerca de {currentHeaderLocality}")
+                        </span>
+                    </span>
+                    <input type="text"
+                           class="header-locality-input"
+                           list="header-locality-options"
+                           value=""
+                           placeholder="buscar localidad"
+                           aria-label="Localidad para buscar"
+                           data-header-locality-input />
+                    <button type="button" class="header-locality-action" data-header-locality-detect>Detectar</button>
+                </div>
+                <datalist id="header-locality-options">
+                    @foreach (var locality in availableHeaderLocalities)
+                    {
+                        var optionLabel = $"{locality.Locality}, {locality.Province}";
+                        <option value="@optionLabel"
+                                data-locality-id="@locality.Id"
+                                data-locality="@locality.Locality"
+                                data-province="@locality.Province"
+                                data-latitude="@locality.Latitude"
+                                data-longitude="@locality.Longitude"></option>
+                    }
+                </datalist>
+                <span class="header-locality-status" data-header-locality-status></span>
             </div>
         </nav>
     </header>
@@ -190,13 +194,12 @@
             <img class="footer-mark" src="~/images/logo5.png" alt="Ventagram" />
             <div>
                 <strong>Ventagram</strong>
-                <p>Basta de anuncios sin precios. La comunidad denuncia, vota y manda avisos a la papelera.</p>
+                <p>Comunidad y Anuncios</p>
             </div>
         </div>
         <div class="footer-links">
-            <a asp-page="/Index">Inicio</a>
-            <a asp-page="/Publications/Create">Publicar</a>
-            <a asp-page="/Trash">Papelera</a>
+            <a asp-page="/Contacto">Contacto</a>
+            <a asp-page="/Legales">Legales</a>
             <a asp-page="/Privacy">Privacidad</a>
         </div>
     </footer>

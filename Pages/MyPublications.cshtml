@@ -1,0 +1,83 @@
+@page "/MisPublicaciones"
+@model Ventagram.Pages.MyPublicationsModel
+@{
+    ViewData["Title"] = "Mis publicaciones";
+}
+
+<section class="favorites-strip favorites-page-strip">
+    <div class="favorites-strip-copy">
+        <span class="eyebrow">Panel</span>
+        <h2>Mis publicaciones</h2>
+    </div>
+    <div class="favorites-strip-actions">
+        <a class="primary-pill" asp-page="/Publications/Create">Crear publicacion</a>
+    </div>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="status-banner success-banner">@Model.SuccessMessage</div>
+}
+
+@if (!Model.Publications.Any())
+{
+    <section class="empty-state">
+        <h2>Todavia no publicaste anuncios.</h2>
+        <p>Desde aqui podras revisar, editar o dar de baja tus publicaciones activas.</p>
+    </section>
+}
+else
+{
+    <section class="publication-admin-list">
+        @foreach (var publication in Model.Publications)
+        {
+            var detailUrl = $"/Publications/Details/{publication.Id}";
+            var imageUrl = publication.ImageList.FirstOrDefault();
+            var statusLabel = publication.IsActive ? publication.Status : "Inactiva";
+
+            <article class="publication-admin-card">
+                <div class="publication-admin-media">
+                    @if (!string.IsNullOrWhiteSpace(imageUrl))
+                    {
+                        <img src="@imageUrl" alt="@publication.Title" />
+                    }
+                    else
+                    {
+                        <div class="publication-admin-placeholder">Sin imagen</div>
+                    }
+                </div>
+                <div class="publication-admin-body">
+                    <div class="publication-admin-head">
+                        <div>
+                            <span class="gallery-kicker">@(publication.Category?.Name ?? "Sin categoria")</span>
+                            <h3>@publication.Title</h3>
+                        </div>
+                        <span class="publication-admin-status @(publication.IsActive ? "is-active" : "is-inactive")">@statusLabel</span>
+                    </div>
+                    <p class="publication-admin-price">@publication.Currency @publication.Price.ToString("N0")</p>
+                    <p>@publication.ShortDescription</p>
+                    <div class="publication-admin-meta">
+                        <span>@(string.IsNullOrWhiteSpace(publication.Locality) ? "Sin ubicacion publica" : publication.Locality)</span>
+                        <span>Creada: @publication.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                        @if (publication.ExpiresAtUtc.HasValue)
+                        {
+                            <span>Vence: @publication.ExpiresAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                        }
+                    </div>
+                    <div class="publication-admin-actions">
+                        <a class="ghost-pill" asp-page="/Publications/Edit" asp-route-id="@publication.Id">Editar datos</a>
+                        <a class="ghost-pill publication-preview-trigger" href="@detailUrl" data-details-url="/api/content/details/@publication.Id">Ver publicacion</a>
+                        @if (publication.IsActive)
+                        {
+                            <form method="post" asp-page-handler="Deactivate" asp-route-id="@publication.Id" onsubmit="return confirm('Esta publicacion se dara de baja. Quieres continuar?');">
+                                <button type="submit" class="danger-pill">Dar de baja</button>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </article>
+        }
+    </section>
+}
+
+<partial name="_GlobalModals" model="Model" />

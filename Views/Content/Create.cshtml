@@ -6,9 +6,9 @@
 
 <section class="form-shell create-shell">
     <div class="section-heading">
-        <span class="eyebrow">Publicacion nueva</span>
-        <h1>Crear publicacion</h1>
-        <p>Completando los datos minimos, y subiendo al menos una foto ya puedes publicar tu anuncio.</p>
+        <span class="eyebrow">@Model.FormEyebrow</span>
+        <h1>@Model.FormTitle</h1>
+        <p>@Model.FormDescription</p>
     </div>
 
     @if (Model.RequiresLogin)
@@ -28,7 +28,11 @@
 
         <div id="create-feedback"></div>
 
-        <form id="createPublicationForm" class="stack-form create-form" autocomplete="off" novalidate>
+        <form id="createPublicationForm"
+              class="stack-form create-form"
+              autocomplete="off"
+              novalidate
+              data-submit-endpoint="@Model.SubmitEndpoint">
             <input type="hidden" name="title" value="@Model.Input.Title" />
             <input type="hidden" name="latitude" value="@(Model.Input.Latitude.HasValue ? Model.Input.Latitude.Value.ToString(CultureInfo.InvariantCulture) : string.Empty)" />
             <input type="hidden" name="longitude" value="@(Model.Input.Longitude.HasValue ? Model.Input.Longitude.Value.ToString(CultureInfo.InvariantCulture) : string.Empty)" />
@@ -129,6 +133,12 @@
 
                 <div class="form-grid" data-dynamic-required-fields-container data-category-fields-endpoint-template="/api/categorias/__CATEGORY_ID__/campos">
                     <div class="wide field-hint" data-dynamic-required-fields-empty hidden></div>
+                    @foreach (var seed in Model.InitialDynamicFieldValues)
+                    {
+                        <label data-dynamic-field="true" data-field-container="@seed.InternalName" hidden>
+                            <input data-dynamic-input="true" value="@seed.Value" />
+                        </label>
+                    }
                 </div>
             </section>
 
@@ -191,7 +201,7 @@
 
                 <div class="create-section-toggle">
                     <label class="checkline compact-check">
-                        <input name="showLocationSection" type="checkbox" data-section-toggle="location" />
+                        <input name="showLocationSection" type="checkbox" data-section-toggle="location" @(Model.ShowLocationSection ? "checked" : null) />
                         <span>Quiero cargar estos datos para posicionar mejor mi anuncio en busquedas (gratuito).</span>
                     </label>
                 </div>
@@ -225,7 +235,7 @@
 
                 <div class="create-section-toggle">
                     <label class="checkline compact-check">
-                        <input name="showTechnicalSection" type="checkbox" data-section-toggle="technical" />
+                        <input name="showTechnicalSection" type="checkbox" data-section-toggle="technical" @(Model.ShowTechnicalSection ? "checked" : null) />
                         <span>Quiero cargar estos datos para posicionar mejor mi anuncio en busquedas (gratuito).</span>
                     </label>
                 </div>
@@ -238,8 +248,8 @@
             </section>
 
             <div class="hero-actions">
-                <button type="submit" class="primary-pill">Publicar</button>
-                <a class="ghost-pill" href="/">Cancelar</a>
+                <button type="submit" class="primary-pill">@Model.SubmitButtonText</button>
+                <a class="ghost-pill" href="@Model.CancelUrl">Cancelar</a>
             </div>
         </form>
     }

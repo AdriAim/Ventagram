@@ -1,0 +1,9 @@
+@page "{id:int}"
+@model Ventagram.Pages.Publications.EditModel
+@{
+    ViewData["Title"] = "Editar publicacion";
+}
+
+<div id="api-page" data-page-kind="edit" data-api-endpoint="/api/content/edit/@Model.Id"></div>
+
+<partial name="_GlobalModals" model="Model" />
