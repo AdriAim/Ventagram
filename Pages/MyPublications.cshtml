@@ -1,29 +1,52 @@
 @page "/MisPublicaciones"
 @model Ventagram.Pages.MyPublicationsModel
 @{
-    ViewData["Title"] = "Mis publicaciones";
+    ViewData["Title"] = "Mis anuncios";
 }
 
 <section class="favorites-strip favorites-page-strip">
     <div class="favorites-strip-copy">
         <span class="eyebrow">Panel</span>
-        <h2>Mis publicaciones</h2>
+        <h2>Mis anuncios</h2>
     </div>
     <div class="favorites-strip-actions">
-        <a class="primary-pill" asp-page="/Publications/Create">Crear publicacion</a>
+        <a class="primary-pill" asp-page="/Publications/Create">Crear anuncio</a>
     </div>
 </section>
+
+@if (Model.PublishingBlocked)
+{
+    <div class="status-banner danger-banner">Tu cuenta no puede publicar nuevos anuncios hasta que un administrador revise el anuncio denunciado.</div>
+}
+
+@if (Model.ReportingBlocked)
+{
+    <div class="status-banner">No puedes denunciar nuevos anuncios porque acumulaste 5 denuncias incorrectas.</div>
+}
+
+@if (Model.IsAdmin)
+{
+    <div class="status-banner civic-banner">
+        <strong>Acceso administrativo activo.</strong>
+        <span><a href="/Trash">Ir a la bandeja de revisión</a></span>
+    </div>
+}
 
 @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
 {
     <div class="status-banner success-banner">@Model.SuccessMessage</div>
 }
 
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="status-banner danger-banner">@Model.ErrorMessage</div>
+}
+
 @if (!Model.Publications.Any())
 {
     <section class="empty-state">
         <h2>Todavia no publicaste anuncios.</h2>
-        <p>Desde aqui podras revisar, editar o dar de baja tus publicaciones activas.</p>
+        <p>Desde aqui podras revisar, editar o dar de baja tus anuncios activos.</p>
     </section>
 }
 else
@@ -66,11 +89,34 @@ else
                     </div>
                     <div class="publication-admin-actions">
                         <a class="ghost-pill" asp-page="/Publications/Edit" asp-route-id="@publication.Id">Editar datos</a>
-                        <a class="ghost-pill publication-preview-trigger" href="@detailUrl" data-details-url="/api/content/details/@publication.Id">Ver publicacion</a>
+                        <a class="ghost-pill publication-preview-trigger" href="@detailUrl" data-details-url="/api/content/details/@publication.Id">Ver anuncio</a>
                         @if (publication.IsActive)
                         {
-                            <form method="post" asp-page-handler="Deactivate" asp-route-id="@publication.Id" onsubmit="return confirm('Esta publicacion se dara de baja. Quieres continuar?');">
-                                <button type="submit" class="danger-pill">Dar de baja</button>
+                            <details class="publication-deactivate-panel">
+                                <summary class="danger-pill">Dar de baja</summary>
+                                <form method="post" asp-page-handler="Deactivate" asp-route-id="@publication.Id" class="publication-deactivate-form">
+                                    <label>
+                                        <span>Motivo de baja</span>
+                                        <select name="reason" required>
+                                            <option value="">Selecciona un motivo</option>
+                                            @foreach (var reason in Ventagram.Pages.MyPublicationsModel.DeactivationReasons)
+                                            {
+                                                <option value="@reason">@reason</option>
+                                            }
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Comentario para el sitio (opcional)</span>
+                                        <textarea name="comment" rows="3" maxlength="1000" placeholder="Si quieres, puedes dejar un comentario para el administrador."></textarea>
+                                    </label>
+                                    <button type="submit" class="danger-pill">Confirmar baja</button>
+                                </form>
+                            </details>
+                        }
+                        else
+                        {
+                            <form method="post" asp-page-handler="Republish" asp-route-id="@publication.Id">
+                                <button type="submit" class="primary-pill">Republicar 30 días</button>
                             </form>
                         }
                     </div>

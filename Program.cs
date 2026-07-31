@@ -83,7 +83,8 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
                     new(ClaimTypes.Email, user.Email),
                     new("phone", user.Phone ?? string.Empty),
                     new("contact-preference", BuildContactPreference(user.RespondsEmails, user.AcceptsCalls, user.RespondsWhatsApp)),
-                    new("provider", user.AuthProvider)
+                    new("provider", user.AuthProvider),
+                    new("is-admin", user.IsAdmin ? "true" : "false")
                 };
 
                 context.Principal = new ClaimsPrincipal(
@@ -115,8 +116,10 @@ builder.Services.AddScoped<PublicationCategoryService>();
 builder.Services.AddScoped<PublicationCategoryFieldService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<FavoriteService>();
+builder.Services.AddScoped<SuggestionService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.AddScoped<NavigationLocalityService>();
+builder.Services.AddHostedService<PublicationExpirationWorker>();
 
 var app = builder.Build();
 
@@ -137,10 +140,12 @@ using (var scope = app.Services.CreateScope())
     await EnsurePublicationReportReasonsTableAsync(db);
     await EnsureFavoriteListsTableAsync(db);
     await EnsureFavoriteListItemsTableAsync(db);
+    await EnsureSiteSuggestionsTableAsync(db);
     await SeedData.InitializeAsync(db);
     await EnsurePublicationMediaTableAsync(db);
     await EnsurePublicationCategoryIdColumnAsync(db);
     await EnsurePublicationReportCommentColumnAsync(db);
+    await EnsureModerationColumnsAsync(db);
 }
 
 if (!app.Environment.IsDevelopment())
@@ -915,6 +920,127 @@ static async Task EnsurePublicationReportCommentColumnAsync(VentagramDbContext d
             await connection.CloseAsync();
         }
     }
+}
+
+static async Task EnsureSiteSuggestionsTableAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await using var create = connection.CreateCommand();
+        create.CommandText = """
+            CREATE TABLE IF NOT EXISTS SiteSuggestions (
+                Id INT NOT NULL AUTO_INCREMENT,
+                UserId INT NULL,
+                SenderName VARCHAR(120) NULL,
+                SenderEmail VARCHAR(160) NULL,
+                Message VARCHAR(2000) NOT NULL,
+                CreatedAtUtc DATETIME(6) NOT NULL,
+                PRIMARY KEY (Id),
+                KEY IX_SiteSuggestions_CreatedAtUtc (CreatedAtUtc),
+                KEY IX_SiteSuggestions_UserId (UserId)
+            )
+            """;
+        await create.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureModerationColumnsAsync(VentagramDbContext db)
+{
+    var connection = db.Database.GetDbConnection();
+    var shouldClose = connection.State != System.Data.ConnectionState.Open;
+    if (shouldClose)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        await EnsureColumnAsync(connection, "Users", "IsAdmin", "bit(1) NOT NULL DEFAULT b'0'");
+        await EnsureColumnAsync(connection, "Users", "CanPublish", "bit(1) NOT NULL DEFAULT b'1'");
+        await EnsureColumnAsync(connection, "Users", "CanReport", "bit(1) NOT NULL DEFAULT b'1'");
+
+        await EnsureColumnAsync(connection, "Publications", "ModerationStatus", "VARCHAR(40) NOT NULL DEFAULT 'None'");
+        await EnsureColumnAsync(connection, "Publications", "ReportWarningSentAtUtc", "DATETIME(6) NULL");
+        await EnsureColumnAsync(connection, "Publications", "ReportTrashSentAtUtc", "DATETIME(6) NULL");
+        await EnsureColumnAsync(connection, "Publications", "TrashedAtUtc", "DATETIME(6) NULL");
+
+        await EnsureColumnAsync(connection, "PublicationReports", "ReporterUserId", "INT NOT NULL DEFAULT 0");
+        await EnsureColumnAsync(connection, "PublicationReports", "CountsTowardThreshold", "bit(1) NOT NULL DEFAULT b'1'");
+        await EnsureColumnAsync(connection, "PublicationReports", "ReviewStatus", "VARCHAR(30) NOT NULL DEFAULT 'Pending'");
+        await EnsureColumnAsync(connection, "PublicationReports", "ReviewedAtUtc", "DATETIME(6) NULL");
+        await EnsureColumnAsync(connection, "PublicationReports", "ReviewedByUserId", "INT NULL");
+
+        await using (var deleteInvalidReports = connection.CreateCommand())
+        {
+            deleteInvalidReports.CommandText = """
+                DELETE FROM PublicationReports
+                WHERE ReporterUserId = 0
+                """;
+            await deleteInvalidReports.ExecuteNonQueryAsync();
+        }
+
+        await using (var adjustReporterColumn = connection.CreateCommand())
+        {
+            adjustReporterColumn.CommandText = """
+                ALTER TABLE PublicationReports
+                MODIFY COLUMN ReporterUserId INT NOT NULL
+                """;
+            await adjustReporterColumn.ExecuteNonQueryAsync();
+        }
+
+        await EnsureIndexAsync(connection, "PublicationReports", "UX_PublicationReports_Publication_Reporter", "UNIQUE KEY UX_PublicationReports_Publication_Reporter (PublicationId, ReporterUserId)");
+    }
+    finally
+    {
+        if (shouldClose)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task EnsureIndexAsync(System.Data.Common.DbConnection connection, string tableName, string indexName, string definition)
+{
+    await using var check = connection.CreateCommand();
+    check.CommandText = """
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = @tableName
+          AND INDEX_NAME = @indexName
+        """;
+    var tableParameter = check.CreateParameter();
+    tableParameter.ParameterName = "@tableName";
+    tableParameter.Value = tableName;
+    check.Parameters.Add(tableParameter);
+    var indexParameter = check.CreateParameter();
+    indexParameter.ParameterName = "@indexName";
+    indexParameter.Value = indexName;
+    check.Parameters.Add(indexParameter);
+
+    var exists = Convert.ToInt32(await check.ExecuteScalarAsync()) > 0;
+    if (exists)
+    {
+        return;
+    }
+
+    await using var alter = connection.CreateCommand();
+    alter.CommandText = $"ALTER TABLE {tableName} ADD {definition}";
+    await alter.ExecuteNonQueryAsync();
 }
 
 static string BuildContactPreference(bool respondsEmails, bool acceptsCalls, bool respondsWhatsApp)

@@ -99,7 +99,8 @@ public class AuthService(
             new(ClaimTypes.Email, user.Email),
             new("phone", user.Phone ?? string.Empty),
             new("contact-preference", BuildContactPreference(user.RespondsEmails, user.AcceptsCalls, user.RespondsWhatsApp)),
-            new("provider", user.AuthProvider)
+            new("provider", user.AuthProvider),
+            new("is-admin", user.IsAdmin ? "true" : "false")
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

@@ -21,7 +21,7 @@ public class DeleteAnonymousModel(PublicationService publicationService) : PageM
 
         var success = await publicationService.DeactivateAnonymousAsync(Input.PublicationId, Input.Password);
         StatusMessage = success
-            ? "La publicación fue dada de baja."
+            ? "El anuncio fue dado de baja."
             : "No se pudo dar de baja. Revisá ID y contraseña.";
         return Page();
     }

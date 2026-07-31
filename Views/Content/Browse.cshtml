@@ -52,6 +52,16 @@
         ? []
         : optionsCsv.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    string GetQueryPlaceholder(string group) => group switch
+    {
+        "Inmuebles" => "Ej. departamento, casa con patio, lote",
+        "Rodados" => "Ej. Ford Fiesta, moto, camioneta",
+        "Embarcaciones" => "Ej. lancha, velero, semirrígido",
+        "Generales" => "Ej. iPhone, bicicleta, heladera",
+        "Todos" => "Ej. departamento, Ford Fiesta, iPhone",
+        _ => "Ej. departamento, Ford Fiesta, iPhone"
+    };
+
     object MapRequiredFilterField(PublicationCategoryField field) => new
     {
         id = field.Id,
@@ -64,14 +74,19 @@
 }
 
 <section class="search-panel" id="search-panel" data-browse-search-panel>
-    <form method="get" action="@searchPath" class="search-grid" data-browse-search-form data-required-filter-form="true" data-required-filter-fields-endpoint="/api/content/required-filter-fields">
+    <form method="get" action="@searchPath" class="search-grid" data-browse-search-form data-group-aware-search-form="true" data-required-filter-form="true" data-required-filter-fields-endpoint="/api/content/required-filter-fields">
         <label>
             <span>Qué buscás</span>
-            <input name="query" value="@Model.Query" placeholder="Ej. departamento, Ford Fiesta, iPhone" />
+            <input name="query" value="@Model.Query" placeholder="@GetQueryPlaceholder(currentGroup)" data-group-aware-query-input="true" />
         </label>
         <label>
             <span>Grupo</span>
-            <select name="group">
+            <select name="group"
+                    data-placeholder-inmuebles="Ej. departamento, casa con patio, lote"
+                    data-placeholder-rodados="Ej. Ford Fiesta, moto, camioneta"
+                    data-placeholder-embarcaciones="Ej. lancha, velero, semirrígido"
+                    data-placeholder-generales="Ej. iPhone, bicicleta, heladera"
+                    data-placeholder-todos="Ej. departamento, Ford Fiesta, iPhone">
                 @foreach (var group in Model.GroupOptions)
                 {
                     if (currentGroup == group.Name)
@@ -189,7 +204,7 @@
             }
             else
             {
-                <span class="field-hint">Todavía no guardaste publicaciones en tus listas.</span>
+                <span class="field-hint">Todavía no guardaste anuncios en tus listas.</span>
             }
         </div>
     </section>
@@ -199,7 +214,7 @@
 {
     <section class="empty-state" data-browse-scroll-target>
         <h2>No hay resultados para esa búsqueda.</h2>
-        <p>Ajustá el grupo o la palabra clave para ver publicaciones activas.</p>
+        <p>Ajustá el grupo o la palabra clave para ver anuncios activos.</p>
     </section>
 }
 else if (currentMode == "Mapa")
@@ -305,7 +320,7 @@ else
              data-gallery-desktop-preload-rows="3"
              data-gallery-mobile-preload-items="20">
             <div class="gallery-rail"></div>
-            <div class="gallery-loader" data-gallery-loader>Preparando publicaciones...</div>
+            <div class="gallery-loader" data-gallery-loader>Preparando anuncios...</div>
             <div class="gallery-sentinel" data-gallery-sentinel aria-hidden="true"></div>
         </div>
     </section>

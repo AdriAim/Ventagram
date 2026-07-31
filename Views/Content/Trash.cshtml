@@ -4,14 +4,14 @@
     <div class="section-heading">
         <span class="eyebrow">Papelera</span>
         <h1>Anuncios enviados por la comunidad</h1>
-        <p>AcÃ¡ aparecen las publicaciones denunciadas. Si un aviso fue marcado por no corresponder, fraude o falta de precio, se ve acÃ¡ con su historial bÃ¡sico.</p>
+        <p>AcÃ¡ aparecen los anuncios denunciados. Si un aviso fue marcado por no corresponder, fraude o falta de precio, se ve acÃ¡ con su historial bÃ¡sico.</p>
     </div>
 
     @if (!Model.Publications.Any())
     {
         <section class="empty-state">
             <h2>La papelera estÃ¡ vacÃ­a.</h2>
-            <p>TodavÃ­a no hay publicaciones denunciadas por la comunidad.</p>
+            <p>TodavÃ­a no hay anuncios denunciados por la comunidad.</p>
         </section>
     }
     else
@@ -19,19 +19,20 @@
         <section class="classified-list">
             @foreach (var item in Model.Publications)
             {
+                var publication = item.Publication;
                 <article class="classified-row">
                     <div>
-                        <span class="card-meta">@item.Group Â· @(item.Category?.Name ?? "Sin categoria") Â· @item.Locality</span>
-                        <h3><a href="/Publications/Details/@item.Id">@item.Title</a></h3>
-                        <p>@item.ShortDescription</p>
+                        <span class="card-meta">@publication.Group Â· @(publication.Category?.Name ?? "Sin categoria") Â· @publication.Locality</span>
+                        <h3><a href="/Publications/Details/@publication.Id">@publication.Title</a></h3>
+                        <p>@publication.ShortDescription</p>
                         <div class="trash-tags">
-                            @foreach (var reason in item.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason?.Name ?? $"RazÃ³n #{r.ReasonId}"))
+                            @foreach (var reason in publication.Reports.OrderByDescending(r => r.CreatedAtUtc).Take(3).Select(r => r.Reason?.Name ?? $"RazÃ³n #{r.ReasonId}"))
                             {
                                 <span class="trash-tag">@reason</span>
                             }
                         </div>
                         @{
-                            var reportComment = item.Reports
+                            var reportComment = publication.Reports
                                 .OrderByDescending(r => r.CreatedAtUtc)
                                 .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Comment))?.Comment;
                         }
@@ -41,8 +42,8 @@
                         }
                     </div>
                     <div class="classified-side">
-                        <strong>@item.Reports.Count denuncia(s)</strong>
-                        <span>@item.Currency @item.Price.ToString("N0")</span>
+                        <strong>@item.PendingReportsCount denuncia(s)</strong>
+                        <span>@publication.Currency @publication.Price.ToString("N0")</span>
                     </div>
                 </article>
             }

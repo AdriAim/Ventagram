@@ -20,6 +20,7 @@ public class ContentController(
     PublicationCategoryFieldService publicationCategoryFieldService,
     ReportService reportService,
     FavoriteService favoriteService,
+    SuggestionService suggestionService,
     CloudflareR2ImageStorageService imageStorageService,
     CurrentUserAccessor currentUserAccessor,
     NavigationLocalityService navigationLocalityService,
@@ -89,7 +90,7 @@ public class ContentController(
         var model = new HomeContentViewModel
         {
             Group = selectedGroupName,
-            GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
+            GroupOptions = await GetBrowseGroupOptionsAsync(),
             Mode = selectedMode,
             Query = query,
             PriceFrom = filters.PriceFrom,
@@ -191,7 +192,7 @@ public class ContentController(
         var model = new HomeContentViewModel
         {
             Group = selectedGroupName,
-            GroupOptions = await publicationGroupTypeService.GetActiveAsync(),
+            GroupOptions = await GetBrowseGroupOptionsAsync(),
             Mode = selectedMode,
             Query = query,
             PriceFrom = filters.PriceFrom,
@@ -311,7 +312,7 @@ public class ContentController(
 
         if (request.PublicationId <= 0)
         {
-            return BadRequest(new { message = "La publicacion indicada no es valida." });
+            return BadRequest(new { message = "El anuncio indicado no es valido." });
         }
 
         try
@@ -327,7 +328,7 @@ public class ContentController(
             {
                 message = result.Added
                     ? $"Guardado en {result.List.Name}."
-                    : $"La publicacion ya estaba en {result.List.Name}.",
+                    : $"El anuncio ya estaba en {result.List.Name}.",
                 listId = result.List.Id,
                 listName = result.List.Name
             });
@@ -338,12 +339,42 @@ public class ContentController(
         }
     }
 
+    [HttpPost("suggestions")]
+    public async Task<IActionResult> SubmitSuggestion([FromBody] SubmitSuggestionRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { message = "Escribe una sugerencia válida." });
+        }
+
+        ApplicationUser? user = null;
+        if (currentUserAccessor.UserId is int userId)
+        {
+            user = await db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == userId);
+        }
+
+        var result = await suggestionService.SubmitAsync(
+            user?.Id,
+            user?.Name,
+            user?.Email,
+            request.Message);
+
+        if (!result.Success)
+        {
+            return BadRequest(new { message = result.Message });
+        }
+
+        return Ok(new { message = result.Message });
+    }
+
     [HttpGet("trash")]
     public async Task<IActionResult> Trash()
     {
         var model = new TrashContentViewModel
         {
-            Publications = await publicationService.GetReportedPublicationsAsync()
+            Publications = await publicationService.GetModerationQueueAsync()
         };
 
         return PartialView("~/Views/Content/Trash.cshtml", model);
@@ -398,6 +429,10 @@ public class ContentController(
             CurrentUserEmail = user?.Email,
             CurrentUserPhone = user?.Phone,
             SuggestedLocalityLabel = suggestedLabel,
+            PublishingBlocked = user is not null && !user.CanPublish,
+            PublishingBlockedMessage = user is not null && !user.CanPublish
+                ? "Tu cuenta no puede publicar nuevos anuncios hasta que un administrador revise el anuncio denunciado."
+                : null,
             MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty
         };
 
@@ -473,8 +508,8 @@ public class ContentController(
             CurrentUserPhone = user.Phone,
             SuggestedLocalityLabel = string.IsNullOrWhiteSpace(publication.Locality) ? null : publication.Locality,
             MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
-            FormEyebrow = "Mis publicaciones",
-            FormTitle = "Editar publicacion",
+            FormEyebrow = "Mis anuncios",
+            FormTitle = "Editar anuncio",
             FormDescription = "Modifica los mismos datos que usas al crear un anuncio, incluyendo imagenes, video, ubicacion y ficha tecnica.",
             SubmitButtonText = "Guardar cambios",
             CancelUrl = "/MisPublicaciones",
@@ -536,6 +571,11 @@ public class ContentController(
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> Report([FromBody] ReportPublicationRequest request)
     {
+        if (currentUserAccessor.UserId is not int userId)
+        {
+            return Unauthorized(new { message = "Debes iniciar sesión para denunciar un anuncio." });
+        }
+
         if (!ModelState.IsValid)
         {
             return BadRequest(new { message = "Datos invalidos para la denuncia." });
@@ -547,8 +587,13 @@ public class ContentController(
             return BadRequest(new { message = "Selecciona un motivo de denuncia valido." });
         }
 
-        await reportService.CreateAsync(request.PublicationId, request.ReasonId, request.Comment);
-        return Ok(new { message = "La denuncia fue enviada para revision." });
+        var result = await reportService.CreateAsync(request.PublicationId, userId, request.ReasonId, request.Comment);
+        if (!result.Success)
+        {
+            return StatusCode(result.StatusCode, new { message = result.Message });
+        }
+
+        return Ok(new { message = result.Message });
     }
 
     [HttpPost("create")]
@@ -573,6 +618,11 @@ public class ContentController(
         if (user is null)
         {
             return Unauthorized(new { message = "No se encontro el usuario autenticado." });
+        }
+
+        if (!user.CanPublish)
+        {
+            return StatusCode(403, new { message = "No puedes publicar nuevos anuncios hasta que un administrador revise el anuncio denunciado." });
         }
 
         request.Currency = NormalizeCurrency(request.Currency);
@@ -602,7 +652,7 @@ public class ContentController(
 
         return Ok(new
         {
-            message = "Publicacion creada.",
+            message = "Anuncio creado.",
             redirectUrl = $"/Publications/Details/{result.Publication.Id}"
         });
     }
@@ -634,7 +684,7 @@ public class ContentController(
         var publication = await publicationService.GetOwnedByIdAsync(id, userId);
         if (publication is null)
         {
-            return NotFound(new { message = "La publicacion no existe o no te pertenece." });
+            return NotFound(new { message = "El anuncio no existe o no te pertenece." });
         }
 
         request.Currency = NormalizeCurrency(request.Currency);
@@ -664,12 +714,12 @@ public class ContentController(
         var updated = await publicationService.UpdateOwnedAsync(id, userId, request);
         if (!updated)
         {
-            return BadRequest(new { message = "No se pudo actualizar la publicacion." });
+            return BadRequest(new { message = "No se pudo actualizar el anuncio." });
         }
 
         return Ok(new
         {
-            message = "Publicacion actualizada.",
+            message = "Anuncio actualizado.",
             redirectUrl = $"/Publications/Details/{id}"
         });
     }
@@ -776,7 +826,7 @@ public class ContentController(
             errors.Add(new { field, message });
         }
 
-        if (!await publicationGroupTypeService.ExistsAsync(request.Group)) AddError("group", "Selecciona el tipo de publicacion.");
+        if (!await publicationGroupTypeService.ExistsAsync(request.Group)) AddError("group", "Selecciona el tipo de anuncio.");
 
         var categoryExists = false;
         if (request.CategoryId <= 0)
@@ -802,7 +852,7 @@ public class ContentController(
 
         if (request.Price <= 0) AddError("price", "Ingresa un precio mayor a cero.");
         if (string.IsNullOrWhiteSpace(request.Currency)) AddError("currency", "Selecciona la moneda.");
-        if (!request.NoLocation && string.IsNullOrWhiteSpace(request.Locality)) AddError("locationSearch", "Indica la ubicacion de la publicacion.");
+        if (!request.NoLocation && string.IsNullOrWhiteSpace(request.Locality)) AddError("locationSearch", "Indica la ubicacion del anuncio.");
         if (!request.NoLocation && (request.Latitude is null || request.Longitude is null))
         {
             AddError("locationSearch", "Marca un punto valido en el mapa.");
@@ -945,6 +995,27 @@ public class ContentController(
         return $"/api/content/gallery-items?{string.Join("&", parts)}";
     }
 
+    private async Task<List<PublicationGroupType>> GetBrowseGroupOptionsAsync()
+    {
+        var groups = await publicationGroupTypeService.GetActiveAsync();
+        if (groups.Any(x => string.Equals(x.Name, "Todos", StringComparison.OrdinalIgnoreCase)))
+        {
+            return groups;
+        }
+
+        return
+        [
+            new PublicationGroupType
+            {
+                Id = 0,
+                Name = "Todos",
+                SortOrder = int.MinValue,
+                IsActive = true
+            },
+            .. groups
+        ];
+    }
+
     private static void AddFilterQueryParts(List<string> parts, PublicationSearchFilters filters)
     {
         if (filters.PriceFrom is decimal priceFrom)
@@ -986,7 +1057,7 @@ public class ContentController(
             return $"{category} en {city}";
         }
 
-        return category ?? "Nueva publicacion";
+        return category ?? "Nuevo anuncio";
     }
 
     private static int NormalizeTextPageSize(int pageSize)

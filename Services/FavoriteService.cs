@@ -46,7 +46,7 @@ public class FavoriteService(VentagramDbContext db)
         var publicationExists = await db.Publications.AnyAsync(x => x.Id == publicationId && x.IsActive);
         if (!publicationExists)
         {
-            throw new InvalidOperationException("La publicación ya no está disponible.");
+            throw new InvalidOperationException("El anuncio ya no está disponible.");
         }
 
         FavoriteList? list = null;

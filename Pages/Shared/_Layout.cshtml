@@ -1,4 +1,6 @@
 @using Ventagram.Services
+@using Microsoft.EntityFrameworkCore
+@inject Ventagram.Data.VentagramDbContext Db
 @inject NavigationLocalityService NavigationLocalityService
 @inject IConfiguration Configuration
 <!DOCTYPE html>
@@ -14,7 +16,46 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body data-user-authenticated="@((User.Identity?.IsAuthenticated ?? false) ? "true" : "false")">
+@{
+    var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+    var reportModalAllowed = false;
+    var reportBlockedMessage = string.Empty;
+    var reportLoginUrl = $"/Account/Login?returnUrl={Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)}";
+    var currentUserIsAdmin = false;
+
+    if (isAuthenticated && int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var layoutUserId))
+    {
+        var layoutUser = await Db.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == layoutUserId);
+        currentUserIsAdmin = layoutUser?.IsAdmin ?? false;
+
+        if (layoutUser is null)
+        {
+            reportBlockedMessage = "Debes iniciar sesión nuevamente para denunciar.";
+        }
+        else if (!layoutUser.CanReport)
+        {
+            reportBlockedMessage = "No puedes denunciar nuevos anuncios porque acumulaste 5 denuncias incorrectas. Según las reglas de funcionamiento del sitio, una denuncia rechazada por el administrador cuenta como incorrecta y al llegar a 5 se bloquea la posibilidad de seguir denunciando.";
+        }
+        else
+        {
+            var createdPublicationsCount = await Db.Publications.CountAsync(x => x.UserId == layoutUserId);
+            if (createdPublicationsCount < 2)
+            {
+                reportBlockedMessage = "Para denunciar debes tener al menos 2 anuncios realizados. Esta regla existe para evitar cuentas creadas solo para denunciar. Puedes ver el detalle completo en las Reglas de funcionamiento del sitio.";
+            }
+            else
+            {
+                reportModalAllowed = true;
+            }
+        }
+    }
+}
+<body data-user-authenticated="@(isAuthenticated ? "true" : "false")"
+      data-report-modal-allowed="@(reportModalAllowed ? "true" : "false")"
+      data-report-block-message="@reportBlockedMessage"
+      data-report-login-url="@reportLoginUrl">
     <div class="page-backdrop"></div>
     @{
         var headerGroup = Context.Request.Query["group"].ToString();
@@ -65,7 +106,7 @@
                 </div>
                 <div class="site-nav-divider" aria-hidden="true"></div>
                 <div class="nav-links">
-                    <a class="nav-main-link" href="/Buscar#search-panel">
+                    <a class="nav-main-link" href="/Buscar?group=Todos#search-panel">
                         <i class="fa-solid fa-compass fa-fw" aria-hidden="true"></i>
                         <span>Explorar</span>
                     </a>
@@ -73,6 +114,13 @@
                         <i class="fa-solid fa-circle-plus fa-fw" aria-hidden="true"></i>
                         <span>Publicar</span>
                     </a>
+                    @if (isAuthenticated)
+                    {
+                        <a class="nav-main-link" asp-page="/MyPublications">
+                            <i class="fa-solid fa-rectangle-list fa-fw" aria-hidden="true"></i>
+                            <span>Mis anuncios</span>
+                        </a>
+                    }
                     <a class="nav-main-link" asp-page="/Favorites" data-auth-required-favorites="@((User.Identity?.IsAuthenticated ?? false) ? "false" : "true")">
                         <i class="fa-solid fa-star fa-fw" aria-hidden="true"></i>
                         <span>Mis favoritos</span>
@@ -80,8 +128,12 @@
                 </div>
             </div>
             <div class="nav-actions">
-                @if (User.Identity?.IsAuthenticated ?? false)
+                @if (isAuthenticated)
                 {
+                    <button type="button" class="ghost-pill compact suggestion-pill" data-suggestion-open="true">
+                        <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
+                        <span>Sugerencias</span>
+                    </button>
                     <a class="mailbox-button"
                        href="@chatMailboxUrl"
                        data-chat-mailbox-button
@@ -92,19 +144,30 @@
                         <span class="mailbox-count" data-chat-unread-count hidden>0</span>
                     </a>
                     <details class="user-menu">
-                        <summary class="user-menu-toggle" title="Hace click para ver configuración del usuario y sus publicaciones">
+                        <summary class="user-menu-toggle" title="Hace click para ver configuración del usuario y sus anuncios">
                             <span class="user-badge">@User.Identity!.Name</span>
                             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                         </summary>
                         <div class="user-menu-panel">
                             <a asp-page="/MyPublications">
                                 <i class="fa-solid fa-rectangle-list" aria-hidden="true"></i>
-                                <span>Mis publicaciones</span>
+                                <span>Mis anuncios</span>
                             </a>
                             <a asp-page="/Favorites">
                                 <i class="fa-solid fa-star" aria-hidden="true"></i>
                                 <span>Favoritos</span>
                             </a>
+                            <a asp-page="/Reglas">
+                                <i class="fa-solid fa-book-open" aria-hidden="true"></i>
+                                <span>Reglas de funcionamiento</span>
+                            </a>
+                            @if (currentUserIsAdmin)
+                            {
+                                <a asp-page="/Trash">
+                                    <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+                                    <span>Bandeja de revisión</span>
+                                </a>
+                            }
                             <a asp-page="/Account/ChangePassword">
                                 <i class="fa-solid fa-key" aria-hidden="true"></i>
                                 <span>Cambiar contrasena</span>
@@ -144,8 +207,8 @@
                            class="header-locality-input"
                            list="header-locality-options"
                            value=""
-                           placeholder="buscar localidad"
-                           aria-label="Localidad para buscar"
+                           placeholder="Buscar/cambiar localidad"
+                           aria-label="Buscar o cambiar localidad"
                            data-header-locality-input />
                     <button type="button" class="header-locality-action" data-header-locality-detect>Detectar</button>
                 </div>
@@ -175,17 +238,43 @@
                 <div class="modal-header">
                     <div class="preview-modal-title">
                         <img class="preview-modal-logo" src="~/images/logo5.png" alt="Ventagram" />
-                        <h5 class="modal-title">Favoritos disponibles con cuenta</h5>
+                        <h5 class="modal-title" data-auth-required-title>Acción no disponible</h5>
                     </div>
                     <button type="button" class="btn-close" data-auth-required-close="true" aria-label="Cerrar"></button>
                 </div>
                 <div class="preview-modal-body auth-required-body">
-                    <p>Puedes crear listas de anuncios favoritos para hacerle seguimiento, funcionalidad solo disponible para usuarios registrados.</p>
-                    <div class="report-actions">
-                        <a class="ghost-pill" asp-page="/Account/Login">Ingresar</a>
-                        <a class="primary-pill" asp-page="/Account/Register">Crear usuario</a>
+                    <p data-auth-required-message>Puedes crear listas de anuncios favoritos para hacerle seguimiento, funcionalidad solo disponible para usuarios registrados.</p>
+                    <div class="report-actions" data-auth-required-actions>
+                        <a class="ghost-pill" data-auth-required-login asp-page="/Account/Login">Ingresar</a>
+                        <a class="primary-pill" data-auth-required-register asp-page="/Account/Register">Crear usuario</a>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="preview-overlay" id="suggestionModal" hidden>
+        <div class="preview-backdrop" data-suggestion-close="true"></div>
+        <div class="preview-dialog preview-dialog-compact">
+            <div class="modal-content ventagram-modal preview-modal-shell report-modal-shell">
+                <div class="modal-header">
+                    <div class="preview-modal-title">
+                        <img class="preview-modal-logo" src="~/images/logo5.png" alt="Ventagram" />
+                        <h5 class="modal-title">Sugerencias para Ventagram</h5>
+                    </div>
+                    <button type="button" class="btn-close" data-suggestion-close="true" aria-label="Cerrar"></button>
+                </div>
+                <form id="suggestionForm" class="preview-modal-body report-modal-body" data-suggestion-form action="/api/content/suggestions">
+                    <p>A Ventagram lo mejoramos entre todos.</p>
+                    <label class="report-note wide">
+                        <span>Tu sugerencia</span>
+                        <textarea name="message" rows="5" maxlength="2000" placeholder="Escribe aquí tu sugerencia para el sitio."></textarea>
+                    </label>
+                    <div class="status-banner" data-suggestion-feedback hidden></div>
+                    <div class="report-actions">
+                        <button type="button" class="ghost-pill" data-suggestion-close="true">Cancelar</button>
+                        <button type="submit" class="primary-pill">Enviar sugerencia</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -199,6 +288,7 @@
         </div>
         <div class="footer-links">
             <a asp-page="/Contacto">Contacto</a>
+            <a asp-page="/Reglas">Reglas de funcionamiento</a>
             <a asp-page="/Legales">Legales</a>
             <a asp-page="/Privacy">Privacidad</a>
         </div>

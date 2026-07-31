@@ -38,5 +38,14 @@ public class ApplicationUser
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    public bool IsAdmin { get; set; }
+
+    public bool CanPublish { get; set; } = true;
+
+    public bool CanReport { get; set; } = true;
+
     public List<FavoriteList> FavoriteLists { get; set; } = [];
+    public List<Publication> Publications { get; set; } = [];
+    public List<PublicationReport> Reports { get; set; } = [];
+    public List<SiteSuggestion> SiteSuggestions { get; set; } = [];
 }

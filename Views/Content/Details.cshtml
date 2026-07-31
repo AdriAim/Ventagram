@@ -4,7 +4,7 @@
 @if (Model.Publication is null)
 {
     <section class="empty-state">
-        <h1>Publicación no encontrada</h1>
+        <h1>Anuncio no encontrado</h1>
         <p>Es posible que haya vencido o sido dada de baja.</p>
     </section>
 }
@@ -86,6 +86,15 @@ else
         <article class="detail-panel detail-contact-panel">
             <h2>Contacto</h2>
             <p><strong>@publication.ContactName</strong></p>
+            <p>
+                <button type="button"
+                        class="ghost-pill report-trigger"
+                        data-publication-id="@publication.Id"
+                        data-publication-code="@publication.ToAdCode()"
+                        data-publication-title="@displayTitle">
+                    Denunciar
+                </button>
+            </p>
             @if (canStartChat)
             {
                 <p>

@@ -41,6 +41,9 @@ public class Publication
     [StringLength(30)]
     public string Status { get; set; } = "Activa";
 
+    [StringLength(40)]
+    public string ModerationStatus { get; set; } = "None";
+
     public bool Featured { get; set; }
 
     public string? InternalNotes { get; set; }
@@ -48,6 +51,17 @@ public class Publication
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? ExpiresAtUtc { get; set; }
+    public DateTime? ExpirationNoticeSentAtUtc { get; set; }
+    public DateTime? ReportWarningSentAtUtc { get; set; }
+    public DateTime? ReportTrashSentAtUtc { get; set; }
+    public DateTime? TrashedAtUtc { get; set; }
+    public DateTime? DeactivatedAtUtc { get; set; }
+
+    [StringLength(80)]
+    public string? DeactivationReason { get; set; }
+
+    [StringLength(1000)]
+    public string? DeactivationComment { get; set; }
 
     [StringLength(128)]
     public string? AnonymousDeletePasswordHash { get; set; }

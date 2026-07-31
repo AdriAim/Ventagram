@@ -14,4 +14,7 @@ public class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor)
     }
 
     public bool IsAuthenticated => httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
+
+    public bool IsAdmin
+        => string.Equals(httpContextAccessor.HttpContext?.User.FindFirstValue("is-admin"), "true", StringComparison.OrdinalIgnoreCase);
 }

@@ -1,7 +1,7 @@
 @using System.Globalization
 @model CreatePublicationContentViewModel
 @{
-    ViewData["Title"] = "Crear publicacion";
+    ViewData["Title"] = "Crear anuncio";
 }
 
 <section class="form-shell create-shell">
@@ -19,11 +19,33 @@
             <a class="primary-pill" href="/Account/Login?returnUrl=/Publications/Create">Iniciar sesion</a>
         </section>
     }
+    else if (Model.PublishingBlocked)
+    {
+        <section class="empty-state">
+            <h2>No puedes publicar por el momento</h2>
+            <p>@Model.PublishingBlockedMessage</p>
+            <p>Si la revisión administrativa determina que no hubo infracción, tu cuenta volverá a quedar habilitada.</p>
+            <a class="ghost-pill" href="/MisPublicaciones">Ver mis anuncios</a>
+        </section>
+    }
     else
     {
         <div class="status-banner civic-banner">
             <strong>Publicas como @(Model.CurrentUserName ?? "usuario registrado")</strong>
-            <span>Tu cuenta queda asociada a esta publicacion.</span>
+            <span>Tu cuenta queda asociada a este anuncio.</span>
+        </div>
+
+        <div class="status-banner">
+            <strong>Antes de publicar, revisa las reglas del sitio.</strong>
+            <span><a href="/Reglas">Ver reglas de funcionamiento</a></span>
+        </div>
+
+        <div class="detail-panel">
+            <h2>Cómo funciona el sistema de denuncias</h2>
+            <p>Si tu anuncio recibe 5 denuncias de 5 usuarios diferentes, te avisaremos por mail para que revises los datos publicados.</p>
+            <p>Si llega a 10 denuncias de 10 usuarios diferentes, el anuncio pasará a papelera para revisión y tu cuenta no podrá publicar nuevos anuncios hasta nuevo aviso.</p>
+            <p>Un administrador revisará el caso y podrá restituir el anuncio y rehabilitar tu cuenta si corresponde.</p>
+            <p><a href="/Reglas">Ver reglas completas de funcionamiento</a></p>
         </div>
 
         <div id="create-feedback"></div>
@@ -126,7 +148,7 @@
 
                     <label class="wide" data-field-container="longDescription">
                         <span>Descripcion completa</span>
-                        <textarea name="longDescription" placeholder="Conta lo importante de la publicacion">@Model.Input.LongDescription</textarea>
+                        <textarea name="longDescription" placeholder="Conta lo importante del anuncio">@Model.Input.LongDescription</textarea>
                         <span class="field-error" data-field-error="longDescription"></span>
                     </label>
                 </div>
@@ -167,7 +189,7 @@
                         <span class="field-hint" data-image-count>0/11 imagenes</span>
                     </div>
                     <div class="upload-previews" data-image-previews></div>
-                    <p class="field-hint">Podes cargar una imagen principal y hasta 10 adicionales. Se guardan en formato web para la publicacion.</p>
+                    <p class="field-hint">Podes cargar una imagen principal y hasta 10 adicionales. Se guardan en formato web para el anuncio.</p>
                     <span class="field-error" data-field-error="imagesCsv"></span>
                 </div>
             </section>
@@ -176,7 +198,7 @@
                 <div class="section-heading">
                     <span class="eyebrow">Paso 3-Video opcional</span>
                     <h2>Subi un video de hasta 1 minuto</h2>
-                    <p>Si cargas un video, pasa a ser el contenido principal de la publicacion.</p>
+                    <p>Si cargas un video, pasa a ser el contenido principal del anuncio.</p>
                 </div>
 
                 <div class="upload-dropzone" data-video-dropzone data-field-container="videoUrl">
@@ -196,7 +218,7 @@
                 <div class="section-heading" data-section-heading>
                     <span class="eyebrow">Ubicación (OPCIONAL)</span>
                     <h2>Marca el punto en el mapa</h2>
-                    <p>Busca una direccion o hace clic sobre el mapa para fijar la ubicacion de la publicacion.</p>
+                    <p>Busca una direccion o hace clic sobre el mapa para fijar la ubicacion del anuncio.</p>
                 </div>
 
                 <div class="create-section-toggle">

@@ -4,17 +4,31 @@
     var currentGroup = string.IsNullOrWhiteSpace(Model.Group) ? "Inmuebles" : Model.Group;
     var previousPage = Math.Max(1, Model.Page - 1);
     var nextPage = Math.Min(Math.Max(1, Model.TotalPages), Model.Page + 1);
+    string GetQueryPlaceholder(string group) => group switch
+    {
+        "Inmuebles" => "Ej. departamento, casa con patio, lote",
+        "Rodados" => "Ej. Ford Fiesta, moto, camioneta",
+        "Embarcaciones" => "Ej. lancha, velero, semirrígido",
+        "Generales" => "Ej. iPhone, bicicleta, heladera",
+        "Todos" => "Ej. departamento, Ford Fiesta, iPhone",
+        _ => "Ej. departamento, Ford Fiesta, iPhone"
+    };
 }
 
 <section class="search-panel" id="search-panel">
-    <form method="get" action="/" class="search-grid">
+    <form method="get" action="/" class="search-grid" data-group-aware-search-form="true">
         <label>
             <span>Qué buscás</span>
-            <input name="query" value="@Model.Query" placeholder="Ej. departamento, Ford Fiesta, iPhone" />
+            <input name="query" value="@Model.Query" placeholder="@GetQueryPlaceholder(currentGroup)" data-group-aware-query-input="true" />
         </label>
         <label>
             <span>Grupo</span>
-            <select name="group">
+            <select name="group"
+                    data-placeholder-inmuebles="Ej. departamento, casa con patio, lote"
+                    data-placeholder-rodados="Ej. Ford Fiesta, moto, camioneta"
+                    data-placeholder-embarcaciones="Ej. lancha, velero, semirrígido"
+                    data-placeholder-generales="Ej. iPhone, bicicleta, heladera"
+                    data-placeholder-todos="Ej. departamento, Ford Fiesta, iPhone">
                 @foreach (var group in Model.GroupOptions)
                 {
                     if (currentGroup == group.Name)
@@ -80,7 +94,7 @@
             }
             else
             {
-                <span class="field-hint">Todavía no guardaste publicaciones en tus listas.</span>
+                <span class="field-hint">Todavía no guardaste anuncios en tus listas.</span>
             }
         </div>
     </section>
@@ -90,7 +104,7 @@
 {
     <section class="empty-state">
         <h2>No hay resultados para esa búsqueda.</h2>
-        <p>Ajustá el grupo o la palabra clave para ver publicaciones activas.</p>
+        <p>Ajustá el grupo o la palabra clave para ver anuncios activos.</p>
     </section>
 }
 else if (currentMode == "Mapa")
@@ -112,7 +126,7 @@ else if (currentMode == "Mapa")
         <div class="map-results" data-map-selection-panel>
             <div class="map-results-copy">
                 <span class="gallery-kicker">Pin seleccionado</span>
-                <h2>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Elegí una publicación en el mapa" : $"{currentGroup} cerca de {Model.UserLocalityLabel}")</h2>
+                <h2>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Elegí un anuncio en el mapa" : $"{currentGroup} cerca de {Model.UserLocalityLabel}")</h2>
                 <p>@(string.IsNullOrWhiteSpace(Model.UserLocalityLabel) ? "Al tocar un pin, acá se muestra la misma tarjeta visual de la galería." : $"El mapa arranca centrado en {Model.UserLocalityLabel} y prioriza los anuncios más cercanos.")</p>
             </div>
             <div class="map-selection-card" data-map-selection-card></div>
@@ -196,7 +210,7 @@ else
              data-gallery-desktop-preload-rows="3"
              data-gallery-mobile-preload-items="20">
             <div class="gallery-rail"></div>
-            <div class="gallery-loader" data-gallery-loader>Preparando publicaciones...</div>
+            <div class="gallery-loader" data-gallery-loader>Preparando anuncios...</div>
             <div class="gallery-sentinel" data-gallery-sentinel aria-hidden="true"></div>
         </div>
     </section>

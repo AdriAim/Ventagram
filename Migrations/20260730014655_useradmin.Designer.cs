@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ventagram.Data;
 
@@ -11,9 +12,11 @@ using Ventagram.Data;
 namespace Ventagram.Migrations
 {
     [DbContext(typeof(VentagramDbContext))]
-    partial class VentagramDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260730014655_useradmin")]
+    partial class useradmin
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -234,20 +237,6 @@ namespace Ventagram.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("varchar(10)");
-
-                    b.Property<DateTime?>("DeactivatedAtUtc")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("DeactivationComment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
-
-                    b.Property<string>("DeactivationReason")
-                        .HasMaxLength(80)
-                        .HasColumnType("varchar(80)");
-
-                    b.Property<DateTime?>("ExpirationNoticeSentAtUtc")
-                        .HasColumnType("datetime(6)");
 
                     b.Property<DateTime?>("ExpiresAtUtc")
                         .HasColumnType("datetime(6)");

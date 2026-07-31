@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Ventagram.Data;
 using Ventagram.Models;
+using Ventagram.ViewModels;
 
 namespace Ventagram.Services;
 
@@ -90,6 +91,7 @@ public class PublicationService(VentagramDbContext db)
     {
         return await db.Publications
             .AsNoTracking()
+            .Include(x => x.User)
             .Include(x => x.Category)
             .Include(x => x.MediaItems)
             .Where(x => x.UserId == userId)
@@ -121,6 +123,67 @@ public class PublicationService(VentagramDbContext db)
             .OrderByDescending(x => x.Reports.Count)
             .ThenByDescending(x => x.Reports.Max(r => r.CreatedAtUtc))
             .ToListAsync();
+    }
+
+    public Task<int> CountCreatedByUserAsync(int userId)
+    {
+        return db.Publications.CountAsync(x => x.UserId == userId);
+    }
+
+    public async Task<List<ModerationQueueItemViewModel>> GetModerationQueueAsync()
+    {
+        var items = await db.Publications
+            .Include(x => x.User)
+            .Include(x => x.Category)
+            .Include(x => x.MediaItems)
+            .Include(x => x.Reports.Where(r => r.ReviewStatus == "Pending"))
+                .ThenInclude(x => x.Reason)
+            .Where(x => x.ModerationStatus == "PendingReview" || x.ModerationStatus == "InTrash")
+            .OrderByDescending(x => x.TrashedAtUtc ?? x.ReportTrashSentAtUtc ?? x.CreatedAtUtc)
+            .ToListAsync();
+
+        return items.Select(item =>
+        {
+            var pendingReports = item.Reports
+                .Where(r => r.ReviewStatus == "Pending")
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .ToList();
+
+            var reasonLabel = string.Join(", ", pendingReports
+                .Select(r => r.Reason?.Name ?? $"Razón #{r.ReasonId}")
+                .Distinct()
+                .Take(4));
+
+            return new ModerationQueueItemViewModel
+            {
+                Publication = item,
+                PendingReportsCount = pendingReports.Count,
+                DistinctReportersCount = pendingReports.Select(r => r.ReporterUserId).Distinct().Count(),
+                LatestReasonsLabel = reasonLabel
+            };
+        }).ToList();
+    }
+
+    public async Task<List<VoluntaryDeactivationQueueItemViewModel>> GetVoluntaryDeactivationQueueAsync()
+    {
+        var items = await db.Publications
+            .AsNoTracking()
+            .Include(x => x.User)
+            .Include(x => x.Category)
+            .Include(x => x.MediaItems)
+            .Where(x => !x.IsActive
+                && x.DeactivatedAtUtc != null
+                && !string.IsNullOrWhiteSpace(x.DeactivationReason))
+            .OrderByDescending(x => x.DeactivatedAtUtc)
+            .Take(100)
+            .ToListAsync();
+
+        return items.Select(item => new VoluntaryDeactivationQueueItemViewModel
+        {
+            Publication = item,
+            OwnerName = item.User?.Name ?? item.ContactName,
+            OwnerEmail = item.User?.Email ?? item.ContactEmail ?? string.Empty
+        }).ToList();
     }
 
     public async Task<(Publication Publication, string? AnonymousPassword)> CreateAsync(PublicationCreateRequest input, int? userId)
@@ -156,7 +219,8 @@ public class PublicationService(VentagramDbContext db)
             InternalNotes = input.InternalNotes,
             Latitude = input.Latitude,
             Longitude = input.Longitude,
-            UserId = userId
+            UserId = userId,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(30)
         };
 
         publication.MediaItems.AddRange(PublicationMediaBuilder.Build(
@@ -169,7 +233,6 @@ public class PublicationService(VentagramDbContext db)
         {
             rawAnonymousPassword = AuthService.GenerateAnonymousPassword();
             publication.IsAnonymous = true;
-            publication.ExpiresAtUtc = DateTime.UtcNow.AddDays(30);
             publication.AnonymousDeletePasswordHash = AuthService.HashPassword(rawAnonymousPassword);
         }
 
@@ -252,7 +315,7 @@ public class PublicationService(VentagramDbContext db)
         return true;
     }
 
-    public async Task<bool> DeactivateOwnedAsync(int publicationId, int userId)
+    public async Task<bool> DeactivateOwnedAsync(int publicationId, int userId, string reason, string? comment)
     {
         var publication = await db.Publications.FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId && x.IsActive);
         if (publication is null)
@@ -262,8 +325,92 @@ public class PublicationService(VentagramDbContext db)
 
         publication.IsActive = false;
         publication.Status = "Baja solicitada";
+        publication.DeactivationReason = string.IsNullOrWhiteSpace(reason) ? "Sin motivo" : reason.Trim();
+        publication.DeactivationComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        publication.DeactivatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<bool> RepublishOwnedAsync(int publicationId, int userId)
+    {
+        var publication = await db.Publications.FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId && !x.IsActive);
+        if (publication is null)
+        {
+            return false;
+        }
+
+        if (publication.ModerationStatus is "PendingReview" or "Confirmed")
+        {
+            return false;
+        }
+
+        publication.IsActive = true;
+        publication.Status = "Activa";
+        publication.CreatedAtUtc = DateTime.UtcNow;
+        publication.ExpiresAtUtc = DateTime.UtcNow.AddDays(30);
+        publication.ExpirationNoticeSentAtUtc = null;
+        publication.DeactivationReason = null;
+        publication.DeactivationComment = null;
+        publication.DeactivatedAtUtc = null;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<int> ExpirePublicationsAndSendNotificationsAsync(IEmailSender emailSender, ILogger logger, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var expired = await db.Publications
+            .Include(x => x.User)
+            .Where(x => x.IsActive
+                && x.ExpiresAtUtc != null
+                && x.ExpiresAtUtc <= now
+                && x.ExpirationNoticeSentAtUtc == null)
+            .OrderBy(x => x.ExpiresAtUtc)
+            .Take(100)
+            .ToListAsync(cancellationToken);
+
+        foreach (var publication in expired)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            publication.IsActive = false;
+            publication.Status = "Vencida";
+            publication.DeactivatedAtUtc = now;
+
+            var email = publication.User?.Email ?? publication.ContactEmail;
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var subject = "Tu anuncio venció en Ventagram";
+                var html = $"""
+                    <p>Tu anuncio <strong>{publication.Title}</strong> finalizó luego de 30 días de estar activo.</p>
+                    <p>Si quieres republicarla, debes ingresar a <strong>Mis anuncios</strong> dentro de tu usuario y usar la opción de republicar.</p>
+                    """;
+                var text = $"""
+                    Tu anuncio "{publication.Title}" finalizó luego de 30 días de estar activo.
+
+                    Si quieres republicarla, debes ingresar a Mis anuncios dentro de tu usuario y usar la opción de republicar.
+                    """;
+
+                try
+                {
+                    await emailSender.SendAsync(email, subject, html, text);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "No se pudo enviar correo de vencimiento para el anuncio {PublicationId}.", publication.Id);
+                }
+            }
+
+            publication.ExpirationNoticeSentAtUtc = DateTime.UtcNow;
+        }
+
+        if (expired.Count > 0)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return expired.Count;
     }
 
     public async Task<bool> UpdateOwnedAsync(

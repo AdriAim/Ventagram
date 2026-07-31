@@ -16,6 +16,7 @@
     wireRegisterLocalityDetection(document);
     wireReportModal();
     wireAuthRequiredModal();
+    wireSuggestionModal();
     wirePublicationPreviewModal();
     wireDetailMediaOverlay();
     wireDetailGalleryLayout();
@@ -177,6 +178,30 @@
       event.preventDefault();
       event.stopPropagation();
 
+      const reportModalAllowed = document.body?.dataset.reportModalAllowed === "true";
+      const reportBlockMessage = String(document.body?.dataset.reportBlockMessage || "").trim();
+      const isAuthenticated = document.body?.dataset.userAuthenticated === "true";
+
+      if (!isAuthenticated) {
+        showAuthRequiredModal({
+          title: "Debes iniciar sesión para denunciar",
+          message: "Para denunciar una publicación debes ingresar con tu usuario.",
+          showRegister: true,
+          showLogin: true
+        });
+        return;
+      }
+
+      if (!reportModalAllowed) {
+        showAuthRequiredModal({
+          title: "No puedes denunciar por el momento",
+          message: reportBlockMessage || "Tu cuenta no cumple los requisitos para denunciar publicaciones.",
+          showRegister: false,
+          showLogin: false
+        });
+        return;
+      }
+
       const publicationId = trigger.getAttribute("data-publication-id");
       const publicationCode = trigger.getAttribute("data-publication-code");
       const title = stripOpportunitySuffix(trigger.getAttribute("data-publication-title"));
@@ -228,17 +253,164 @@
       link.dataset.authRequiredBound = "true";
       link.addEventListener("click", event => {
         event.preventDefault();
-        showAuthRequiredModal();
+        showAuthRequiredModal({
+          title: "Debes iniciar sesión",
+          message: "Puedes crear listas de anuncios favoritos para hacer seguimiento solo con una cuenta registrada.",
+          showRegister: true,
+          showLogin: true
+        });
       });
     });
   }
 
-  function showAuthRequiredModal() {
+  function showAuthRequiredModal(options = {}) {
     const modal = document.getElementById("authRequiredModal");
     if (!modal) return;
+    const title = modal.querySelector("[data-auth-required-title]");
+    const message = modal.querySelector("[data-auth-required-message]");
+    const loginLink = modal.querySelector("[data-auth-required-login]");
+    const registerLink = modal.querySelector("[data-auth-required-register]");
+    const actions = modal.querySelector("[data-auth-required-actions]");
+    const loginUrl = document.body?.dataset.reportLoginUrl || "/Account/Login";
+    const showLogin = options.showLogin !== false;
+    const showRegister = options.showRegister !== false;
+
+    if (title) {
+      title.textContent = options.title || "Acción no disponible";
+    }
+
+    if (message) {
+      message.textContent = options.message || "Debes iniciar sesión para continuar.";
+    }
+
+    if (loginLink) {
+      loginLink.hidden = !showLogin;
+      loginLink.setAttribute("href", options.loginUrl || loginUrl);
+    }
+
+    if (registerLink) {
+      registerLink.hidden = !showRegister;
+    }
+
+    if (actions) {
+      actions.hidden = !showLogin && !showRegister;
+    }
+
     modal.hidden = false;
     modal.classList.add("is-open");
     document.body.classList.add("preview-open");
+  }
+
+  function wireSuggestionModal() {
+    const modal = document.getElementById("suggestionModal");
+    const form = document.getElementById("suggestionForm");
+    if (!modal || !form) return;
+    if (modal.dataset.bound === "true") return;
+    modal.dataset.bound = "true";
+
+    const textarea = form.querySelector('textarea[name="message"]');
+    const feedback = form.querySelector("[data-suggestion-feedback]");
+
+    const close = () => {
+      modal.hidden = true;
+      modal.classList.remove("is-open");
+      document.body.classList.remove("preview-open");
+      if (feedback) {
+        feedback.hidden = true;
+        feedback.className = "status-banner";
+        feedback.textContent = "";
+      }
+    };
+
+    modal.addEventListener("click", event => {
+      const closeTrigger = event.target.closest("[data-suggestion-close='true']");
+      if (!closeTrigger) return;
+      event.preventDefault();
+      close();
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && modal.classList.contains("is-open")) {
+        close();
+      }
+    });
+
+    document.querySelectorAll("[data-suggestion-open='true']").forEach(button => {
+      if (button.dataset.suggestionBound === "true") return;
+      button.dataset.suggestionBound = "true";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        if (textarea) {
+          textarea.value = "";
+        }
+        if (feedback) {
+          feedback.hidden = true;
+          feedback.className = "status-banner";
+          feedback.textContent = "";
+        }
+        modal.hidden = false;
+        modal.classList.add("is-open");
+        document.body.classList.add("preview-open");
+        textarea?.focus();
+      });
+    });
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      const message = String(textarea?.value || "").trim();
+      if (!message) {
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.className = "status-banner warning";
+          feedback.textContent = "Escribe una sugerencia antes de enviarla.";
+        }
+        return;
+      }
+
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
+
+      try {
+        const response = await fetch(form.getAttribute("action") || "/api/content/suggestions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "fetch"
+          },
+          body: JSON.stringify({ message })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || "No se pudo enviar la sugerencia.");
+        }
+
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.className = "status-banner success-banner";
+          feedback.textContent = payload.message || "Sugerencia enviada.";
+        }
+
+        if (textarea) {
+          textarea.value = "";
+        }
+
+        window.setTimeout(() => close(), 1200);
+      } catch (error) {
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.className = "status-banner danger-banner";
+          feedback.textContent = error?.message || "No se pudo enviar la sugerencia.";
+        }
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+      }
+    });
   }
 
   function wirePhoneMasks(root) {
@@ -592,7 +764,23 @@
         body: JSON.stringify(payload)
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          showAuthRequiredModal({
+            title: "Debes iniciar sesión para denunciar",
+            message: result?.message || "Para denunciar una publicación debes ingresar con tu usuario.",
+            showRegister: true,
+            showLogin: true
+          });
+          return;
+        }
+
+        ventagramFlashMessage = result?.message || "No se pudo enviar la denuncia.";
+        await loadApiPage();
+        return;
+      }
+
       ventagramFlashMessage = result.message || "La denuncia fue enviada.";
 
       const modal = document.getElementById("reportModal");
@@ -743,7 +931,12 @@
       if (!response.ok) {
         if (response.status === 401) {
           close();
-          showAuthRequiredModal();
+          showAuthRequiredModal({
+            title: "Debes iniciar sesión",
+            message: "Puedes crear listas de anuncios favoritos para hacer seguimiento solo con una cuenta registrada.",
+            showRegister: true,
+            showLogin: true
+          });
           return;
         }
         ventagramFlashMessage = result?.message || "No se pudo guardar en favoritos.";
@@ -788,7 +981,12 @@
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       if (response.status === 401) {
-        showAuthRequiredModal();
+        showAuthRequiredModal({
+          title: "Debes iniciar sesión",
+          message: "Puedes crear listas de anuncios favoritos para hacer seguimiento solo con una cuenta registrada.",
+          showRegister: true,
+          showLogin: true
+        });
         return;
       }
       ventagramFlashMessage = result?.message || "Tenes que iniciar sesion para usar favoritos.";
@@ -1650,6 +1848,7 @@
 
   function wireBrowseSearchFilters(root = document) {
     root.querySelectorAll("[data-price-range-filter]").forEach(wirePriceRangeFilter);
+    root.querySelectorAll("[data-group-aware-search-form='true']").forEach(wireGroupAwareSearchPlaceholder);
 
     const form = root.querySelector?.("[data-required-filter-form='true']");
     if (!form || form.dataset.requiredFiltersBound === "true") return;
@@ -1679,6 +1878,32 @@
       fields = response.ok ? parseRequiredFilterFields(await response.text()) : [];
       renderFields();
     });
+  }
+
+  function wireGroupAwareSearchPlaceholder(form) {
+    if (!form || form.dataset.groupAwarePlaceholderBound === "true") return;
+
+    const groupSelect = form.querySelector('select[name="group"]');
+    const queryInput = form.querySelector("[data-group-aware-query-input='true']");
+    if (!groupSelect || !queryInput) return;
+
+    form.dataset.groupAwarePlaceholderBound = "true";
+
+    const placeholders = {
+      inmuebles: groupSelect.dataset.placeholderInmuebles || "Ej. departamento, casa con patio, lote",
+      rodados: groupSelect.dataset.placeholderRodados || "Ej. Ford Fiesta, moto, camioneta",
+      embarcaciones: groupSelect.dataset.placeholderEmbarcaciones || "Ej. lancha, velero, semirrígido",
+      generales: groupSelect.dataset.placeholderGenerales || "Ej. iPhone, bicicleta, heladera",
+      todos: groupSelect.dataset.placeholderTodos || "Ej. departamento, Ford Fiesta, iPhone"
+    };
+
+    const syncPlaceholder = () => {
+      const key = String(groupSelect.value || "Todos").trim().toLowerCase();
+      queryInput.placeholder = placeholders[key] || placeholders.todos;
+    };
+
+    syncPlaceholder();
+    groupSelect.addEventListener("change", syncPlaceholder);
   }
 
   function wirePriceRangeFilter(wrapper) {
