@@ -12,19 +12,19 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:8.0-noble AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["Ventagram.ChatService/Ventagram.ChatService.csproj", "Ventagram.ChatService/"]
-RUN dotnet restore "./Ventagram.ChatService/Ventagram.ChatService.csproj"
+COPY ["Ventagram.Web.csproj", "."]
+RUN dotnet restore "./Ventagram.Web.csproj"
 COPY . .
-WORKDIR "/src/Ventagram.ChatService"
-RUN dotnet build "./Ventagram.ChatService.csproj" -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR "/src/."
+RUN dotnet build "./Ventagram.Web.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # Esta fase se usa para publicar el proyecto de servicio que se copiará en la fase final.
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Ventagram.ChatService.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./Ventagram.Web.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # Esta fase se usa en producción o cuando se ejecuta desde VS en modo normal (valor predeterminado cuando no se usa la configuración de depuración)
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "Ventagram.ChatService.dll"]
+ENTRYPOINT ["dotnet", "Ventagram.Web.dll"]
