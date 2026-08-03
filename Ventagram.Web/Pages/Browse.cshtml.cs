@@ -31,8 +31,6 @@ public class BrowseModel(IConfiguration configuration, VentagramDbContext db) : 
 
     public List<PublicationReportReason> ReportReasons { get; private set; } = [];
 
-    public string MapTilerKey => configuration["MapTiler:ApiKey"] ?? string.Empty;
-
     public async Task OnGetAsync()
     {
         ReportReasons = await db.PublicationReportReasons

@@ -91,6 +91,10 @@
 
             <div class="inline-checks">
                 <label class="checkline compact-check">
+                    <input asp-for="Input.AllowSiteChat" />
+                    <span>Chat directo en el sitio (recomendado)</span>
+                </label>
+                <label class="checkline compact-check">
                     <input asp-for="Input.RespondsEmails" />
                     <span>Respondo emails</span>
                 </label>
@@ -104,6 +108,9 @@
                 </label>
             </div>
             <span class="field-hint">Solo se mostraran en el anuncio los datos de contacto que marques.</span>
+            <div class="status-banner warning">
+                Publicar tu telefono o email puede dejarte expuesto a llamadas, mensajes o contactos fraudulentos. El chat del sitio evita mostrar esos datos en el aviso.
+            </div>
         </div>
 
         <div class="register-row">

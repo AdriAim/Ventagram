@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using Ventagram.ChatService.Data;
@@ -7,10 +8,23 @@ using Ventagram.ChatService.Hubs;
 using Ventagram.ChatService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuredUrls = builder.Configuration["urls"]
+    ?? builder.Configuration["ASPNETCORE_URLS"]
+    ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS")
+    ?? string.Empty;
+var hasHttpsUrlConfigured = configuredUrls
+    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Any(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var sharedApplicationName = builder.Configuration["Authentication:SharedApplicationName"] ?? "Ventagram";
 var dataProtectionBuilder = builder.Services.AddDataProtection()
@@ -107,6 +121,7 @@ builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.AddHostedService<ChatEmailReminderWorker>();
 
 var app = builder.Build();
+app.UseForwardedHeaders();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -117,10 +132,16 @@ using (var scope = app.Services.CreateScope())
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/error");
-    app.UseHsts();
+    if (hasHttpsUrlConfigured)
+    {
+        app.UseHsts();
+    }
 }
 
-app.UseHttpsRedirection();
+if (hasHttpsUrlConfigured)
+{
+    app.UseHttpsRedirection();
+}
 app.UseRouting();
 if (allowedCorsOrigins.Length > 0)
 {

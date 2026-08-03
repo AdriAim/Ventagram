@@ -4,6 +4,7 @@ namespace Ventagram.ViewModels;
 
 public class HomeContentViewModel
 {
+    public string MapStyleUrl { get; set; } = string.Empty;
     public string Group { get; set; } = "Inmuebles";
     public List<PublicationGroupType> GroupOptions { get; set; } = [];
     public string Mode { get; set; } = "Galeria";
@@ -13,7 +14,10 @@ public class HomeContentViewModel
     public decimal PriceSliderMax { get; set; } = 1000000m;
     public List<PublicationCategoryField> RequiredFilterFields { get; set; } = [];
     public List<PublicationFieldSearchFilter> SelectedFieldFilters { get; set; } = [];
-    public string MapTilerKey { get; set; } = string.Empty;
+    public string MapTilesUrlTemplate { get; set; } = string.Empty;
+    public string MapAttributionHtml { get; set; } = string.Empty;
+    public string MapGeocodingSearchUrlTemplate { get; set; } = string.Empty;
+    public string MapReverseGeocodingUrlTemplate { get; set; } = string.Empty;
     public string MarkersJson { get; set; } = "[]";
     public List<Publication> Publications { get; set; } = [];
     public string? FlashMessage { get; set; }

@@ -4,6 +4,7 @@ namespace Ventagram.ViewModels;
 
 public class CreatePublicationContentViewModel
 {
+    public string MapStyleUrl { get; set; } = string.Empty;
     public PublicationCreateRequest Input { get; set; } = new();
     public List<PublicationGroupType> GroupOptions { get; set; } = [];
     public List<PublicationCategory> Categories { get; set; } = [];
@@ -13,7 +14,10 @@ public class CreatePublicationContentViewModel
     public string? CurrentUserEmail { get; set; }
     public string? CurrentUserPhone { get; set; }
     public string? SuggestedLocalityLabel { get; set; }
-    public string MapTilerKey { get; set; } = string.Empty;
+    public string MapTilesUrlTemplate { get; set; } = string.Empty;
+    public string MapAttributionHtml { get; set; } = string.Empty;
+    public string MapGeocodingSearchUrlTemplate { get; set; } = string.Empty;
+    public string MapReverseGeocodingUrlTemplate { get; set; } = string.Empty;
     public string FormEyebrow { get; set; } = "Anuncio nuevo";
     public string FormTitle { get; set; } = "Crear anuncio";
     public string FormDescription { get; set; } = "Completando los datos minimos, y subiendo al menos una foto ya puedes publicar tu anuncio.";

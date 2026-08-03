@@ -238,7 +238,13 @@
                         <button type="button" class="primary-pill large" data-create-address-search>Buscar</button>
                     </div>
 
-                    <div class="create-map-canvas" data-create-map data-maptiler-key="@Model.MapTilerKey"></div>
+                    <div class="create-map-canvas"
+                         data-create-map
+                         data-map-style-url="@Model.MapStyleUrl"
+                         data-map-tiles-url="@Model.MapTilesUrlTemplate"
+                         data-map-attribution="@Model.MapAttributionHtml"
+                         data-map-geocoding-search-url="@Model.MapGeocodingSearchUrlTemplate"
+                         data-map-reverse-geocoding-url="@Model.MapReverseGeocodingUrlTemplate"></div>
                     <p class="create-map-summary" data-create-location-summary>
                         @(string.IsNullOrWhiteSpace(Model.SuggestedLocalityLabel)
                             ? "Elegi una ubicacion en el mapa o buscala por direccion."

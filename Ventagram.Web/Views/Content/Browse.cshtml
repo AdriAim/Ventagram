@@ -221,15 +221,17 @@ else if (currentMode == "Mapa")
 {
     <section class="map-layout" data-browse-scroll-target data-map-layout>
         <div class="map-canvas" id="map"
-             data-maptiler-key="@Model.MapTilerKey"
+             data-map-style-url="@Model.MapStyleUrl"
+             data-map-tiles-url="@Model.MapTilesUrlTemplate"
+             data-map-attribution="@Model.MapAttributionHtml"
              data-map-initial-lat="@Model.UserLocalityLatitude"
              data-map-initial-lng="@Model.UserLocalityLongitude"
              data-markers='@Model.MarkersJson'>
-            @if (string.IsNullOrWhiteSpace(Model.MapTilerKey))
+            @if (string.IsNullOrWhiteSpace(Model.MapStyleUrl) && string.IsNullOrWhiteSpace(Model.MapTilesUrlTemplate))
             {
                 <div class="map-placeholder">
-                    <h2>Mapa listo para MapTiler</h2>
-                    <p>Cargá <code>MapTiler:ApiKey</code> en <code>appsettings.json</code> para activar el mapa interactivo.</p>
+                    <h2>Mapa listo para MapLibre</h2>
+                    <p>Cargá <code>Map:StyleUrl</code> o <code>Map:TilesUrlTemplate</code> en <code>appsettings.json</code> para activar el mapa interactivo.</p>
                 </div>
             }
         </div>

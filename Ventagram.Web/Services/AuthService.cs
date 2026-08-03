@@ -35,6 +35,7 @@ public class AuthService(
         string phone,
         string password,
         string phoneCountry,
+        bool allowsSiteChat,
         bool respondsEmails,
         bool acceptsCalls,
         bool respondsWhatsApp,
@@ -54,11 +55,12 @@ public class AuthService(
             Name = name.Trim(),
             Email = email,
             Phone = phone.Trim(),
+            AllowsSiteChat = allowsSiteChat,
             RespondsEmails = respondsEmails,
             AcceptsCalls = acceptsCalls,
             RespondsWhatsApp = respondsWhatsApp,
             ArgentineLocalityId = argentineLocalityId,
-            ContactPreference = BuildContactPreference(respondsEmails, acceptsCalls, respondsWhatsApp),
+            ContactPreference = BuildContactPreference(allowsSiteChat, respondsEmails, acceptsCalls, respondsWhatsApp),
             PasswordHash = provider == "Google" ? string.Empty : HashPassword(password),
             AuthProvider = provider
         };
@@ -84,7 +86,7 @@ public class AuthService(
             return existing;
         }
 
-        var created = await RegisterAsync(name, normalized, string.Empty, string.Empty, "AR", false, true, true, null, "Google");
+        var created = await RegisterAsync(name, normalized, string.Empty, string.Empty, "AR", true, false, true, true, null, "Google");
         return created.User!;
     }
 
@@ -98,7 +100,7 @@ public class AuthService(
             new(ClaimTypes.Name, user.Name),
             new(ClaimTypes.Email, user.Email),
             new("phone", user.Phone ?? string.Empty),
-            new("contact-preference", BuildContactPreference(user.RespondsEmails, user.AcceptsCalls, user.RespondsWhatsApp)),
+            new("contact-preference", BuildContactPreference(user.AllowsSiteChat, user.RespondsEmails, user.AcceptsCalls, user.RespondsWhatsApp)),
             new("provider", user.AuthProvider),
             new("is-admin", user.IsAdmin ? "true" : "false")
         };
@@ -153,9 +155,14 @@ public class AuthService(
         return (true, null);
     }
 
-    private static string BuildContactPreference(bool respondsEmails, bool acceptsCalls, bool respondsWhatsApp)
+    private static string BuildContactPreference(bool allowsSiteChat, bool respondsEmails, bool acceptsCalls, bool respondsWhatsApp)
     {
         var preferences = new List<string>();
+        if (allowsSiteChat)
+        {
+            preferences.Add("SiteChat");
+        }
+
         if (respondsEmails)
         {
             preferences.Add("Email");

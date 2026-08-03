@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Ventagram.Data;
@@ -100,6 +101,12 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 }
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 var dataProtectionBuilder = builder.Services.AddDataProtection()
     .SetApplicationName(sharedApplicationName);
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
@@ -122,6 +129,7 @@ builder.Services.AddScoped<NavigationLocalityService>();
 builder.Services.AddHostedService<PublicationExpirationWorker>();
 
 var app = builder.Build();
+app.UseForwardedHeaders();
 
 using (var scope = app.Services.CreateScope())
 {

@@ -201,8 +201,8 @@ img {
 
 .brand-mark,
 .footer-mark {
-  width: 58px;
-  height: 58px;
+  width: 116px;
+  height: 116px;
   object-fit: contain;
   filter: drop-shadow(0 18px 24px rgba(255, 75, 95, 0.18));
 }
@@ -3550,7 +3550,7 @@ textarea.input-validation-error,
 
   .site-nav {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     border-radius: 32px;
     gap: 1rem;
     padding: 1.05rem;
@@ -3558,7 +3558,7 @@ textarea.input-validation-error,
   }
 
   .brand-lockup {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 1;
   }
 
@@ -3575,23 +3575,23 @@ textarea.input-validation-error,
   .site-nav-center {
     width: 100%;
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     gap: 0.75rem;
   }
 
   .nav-actions {
-    grid-column: 2;
-    grid-row: 1;
-    width: auto;
-    justify-self: end;
-    align-self: start;
-    justify-content: flex-end;
-    flex-wrap: nowrap;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    justify-self: stretch;
+    align-self: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .header-locality-bar {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 4;
     width: 100%;
   }
 
@@ -3665,7 +3665,8 @@ textarea.input-validation-error,
   }
 
   .nav-actions {
-    justify-content: flex-end;
+    justify-content: flex-start;
+    gap: 0.55rem;
   }
 
   .mailbox-button {

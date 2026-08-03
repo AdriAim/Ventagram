@@ -169,7 +169,9 @@ else
                 <div class="detail-map-canvas"
                      data-publication-map
                      data-map-mode="detail"
-                     data-maptiler-key="@Model.MapTilerKey"
+                     data-map-style-url="@Model.MapStyleUrl"
+                     data-map-tiles-url="@Model.MapTilesUrlTemplate"
+                     data-map-attribution="@Model.MapAttributionHtml"
                      data-markers='@Html.Raw(JsonSerializer.Serialize(new[]
                      {
                          new

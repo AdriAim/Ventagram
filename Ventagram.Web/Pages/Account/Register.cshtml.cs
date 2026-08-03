@@ -51,7 +51,7 @@ public class RegisterModel(AuthService authService, IConfiguration configuration
             return Page();
         }
 
-        if (!Input.RespondsEmails && !Input.AcceptsCalls && !Input.RespondsWhatsApp)
+        if (!Input.AllowSiteChat && !Input.RespondsEmails && !Input.AcceptsCalls && !Input.RespondsWhatsApp)
         {
             ModelState.AddModelError(string.Empty, "Marca al menos una forma de contacto.");
             return Page();
@@ -63,6 +63,7 @@ public class RegisterModel(AuthService authService, IConfiguration configuration
             Input.PhoneCountry == "AR" ? Input.Phone : Input.Phone.Trim(),
             Input.Password,
             Input.PhoneCountry,
+            Input.AllowSiteChat,
             Input.RespondsEmails,
             Input.AcceptsCalls,
             Input.RespondsWhatsApp,
@@ -132,6 +133,8 @@ public class RegisterModel(AuthService authService, IConfiguration configuration
         public bool AcceptsCalls { get; set; }
 
         public bool RespondsWhatsApp { get; set; }
+
+        public bool AllowSiteChat { get; set; } = true;
 
         [Required(ErrorMessage = "Ingresa una contrasena.")]
         public string Password { get; set; } = string.Empty;

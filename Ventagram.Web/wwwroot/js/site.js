@@ -1,14 +1,15 @@
 ﻿(() => {
   let ventagramFlashMessage = "";
-  let maptilerSdkPromise = null;
+  let mapLibreSdkPromise = null;
   let openPublicationPreview = null;
   let mapSelectionLayoutObserver = null;
   let mapSelectionLayoutResizeHandler = null;
   const favoriteLastListStorageKey = "ventagram:last-favorite-list-id";
   const likedPublicationsStorageKey = "ventagram:liked-publications";
   const NAVIGATION_LOCALITY_COOKIE = "ventagram_nav_locality_id";
-  const maptilerKeyHealth = new Map();
   const chatConfig = window.__VENTAGRAM_CHAT_CONFIG || {};
+  const supportedMapBounds = [[-73.6, -56.5], [-52.0, -19.0]];
+  const supportedMapCenter = [-60.5, -31.5];
 
   document.addEventListener("DOMContentLoaded", async () => {
     wirePhoneMasks(document);
@@ -1248,7 +1249,7 @@
     const createMap = document.querySelector("[data-create-map]");
     if (!homeMap && !publicationMap && !createMap) return;
 
-    const sdk = await loadMaptilerSdk();
+    const sdk = await loadMapLibreSdk();
     if (homeMap) {
       await initHomeMap(homeMap, sdk);
     }
@@ -1286,47 +1287,49 @@
     });
   }
 
-  function loadMaptilerSdk() {
-    if (maptilerSdkPromise) {
-      return maptilerSdkPromise;
+  function loadMapLibreSdk() {
+    if (mapLibreSdkPromise) {
+      return mapLibreSdkPromise;
     }
 
-    maptilerSdkPromise = new Promise((resolve, reject) => {
-      if (!document.querySelector('link[data-maptiler-css="true"]')) {
+    mapLibreSdkPromise = new Promise((resolve, reject) => {
+      if (!document.querySelector('link[data-maplibre-css="true"]')) {
         const link = document.createElement("link");
-        link.dataset.maptilerCss = "true";
+        link.dataset.maplibreCss = "true";
         link.rel = "stylesheet";
-        link.href = "https://cdn.maptiler.com/maptiler-sdk-js/latest/maptiler-sdk.css";
+        link.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
         document.head.appendChild(link);
       }
 
-      if (window.maptilersdk) {
-        resolve(window.maptilersdk);
+      if (window.maplibregl) {
+        resolve(window.maplibregl);
         return;
       }
 
-      const existingScript = document.querySelector('script[data-maptiler-sdk="true"]');
+      const existingScript = document.querySelector('script[data-maplibre-sdk="true"]');
       if (existingScript) {
-        existingScript.addEventListener("load", () => resolve(window.maptilersdk), { once: true });
-        existingScript.addEventListener("error", () => reject(new Error("No se pudo cargar MapTiler.")), { once: true });
+        existingScript.addEventListener("load", () => resolve(window.maplibregl), { once: true });
+        existingScript.addEventListener("error", () => reject(new Error("No se pudo cargar MapLibre.")), { once: true });
         return;
       }
 
       const script = document.createElement("script");
-      script.dataset.maptilerSdk = "true";
-      script.src = "https://cdn.maptiler.com/maptiler-sdk-js/latest/maptiler-sdk.umd.min.js";
-      script.onload = () => resolve(window.maptilersdk);
-      script.onerror = () => reject(new Error("No se pudo cargar MapTiler."));
+      script.dataset.maplibreSdk = "true";
+      script.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+      script.onload = () => resolve(window.maplibregl);
+      script.onerror = () => reject(new Error("No se pudo cargar MapLibre."));
       document.head.appendChild(script);
     });
 
-    return maptilerSdkPromise;
+    return mapLibreSdkPromise;
   }
 
   async function initHomeMap(mapElement, sdk) {
     if (mapElement.dataset.mapInitialized === "true") return;
-    const apiKey = mapElement.dataset.maptilerKey;
-    if (!apiKey) return;
+    const styleUrl = String(mapElement.dataset.mapStyleUrl || "").trim();
+    const tilesUrlTemplate = String(mapElement.dataset.mapTilesUrl || "").trim();
+    if (!styleUrl && !tilesUrlTemplate) return;
+    const attribution = String(mapElement.dataset.mapAttribution || "").trim();
     const mapMode = mapElement.dataset.mapMode || "home";
     const initialLat = Number.parseFloat(mapElement.dataset.mapInitialLat || "");
     const initialLng = Number.parseFloat(mapElement.dataset.mapInitialLng || "");
@@ -1335,24 +1338,12 @@
     const markers = JSON.parse(mapElement.dataset.markers || "[]");
     if (!markers.length) return;
 
-    const keyState = await ensureMapTilerKeyState(apiKey);
-    if (!keyState.ok) {
-      renderMapPlaceholder(
-        mapElement,
-        "Mapa no disponible",
-        keyState.message || "No se pudo cargar MapTiler para esta vista."
-      );
-      mapElement.dataset.mapInitialized = "true";
-      return;
-    }
-
-    sdk.config.apiKey = apiKey;
     mapElement.innerHTML = "";
 
     const instance = new sdk.Map({
       container: mapElement,
-      style: sdk.MapStyle.STREETS,
-      language: "es",
+      style: buildMapStyle(styleUrl, tilesUrlTemplate, attribution),
+      maxBounds: supportedMapBounds,
       center: hasInitialCenter ? [initialLng, initialLat] : [markers[0].lng, markers[0].lat],
       zoom: mapMode === "detail" ? 17.5 : (hasInitialCenter ? 11 : 5)
     });
@@ -1528,8 +1519,12 @@
 
   async function initCreateMap(mapElement, sdk) {
     if (mapElement.dataset.mapInitialized === "true") return;
-    const apiKey = mapElement.dataset.maptilerKey;
-    if (!apiKey) return;
+    const styleUrl = String(mapElement.dataset.mapStyleUrl || "").trim();
+    const tilesUrlTemplate = String(mapElement.dataset.mapTilesUrl || "").trim();
+    if (!styleUrl && !tilesUrlTemplate) return;
+    const attribution = String(mapElement.dataset.mapAttribution || "").trim();
+    const geocodingSearchUrlTemplate = String(mapElement.dataset.mapGeocodingSearchUrl || "").trim();
+    const reverseGeocodingUrlTemplate = String(mapElement.dataset.mapReverseGeocodingUrl || "").trim();
 
     const form = mapElement.closest("form");
     if (!form) return;
@@ -1538,28 +1533,18 @@
     const longitudeInput = form.querySelector('input[name="longitude"]');
     const localityInput = form.querySelector('input[name="locality"]');
     const addressInput = form.querySelector('input[name="address"]');
-    const titleInput = form.querySelector('input[name="title"]');
     const searchInput = form.querySelector('input[name="locationSearch"]');
     const noLocationInput = form.querySelector("[data-create-no-location]");
     const searchButton = form.querySelector("[data-create-address-search]");
     const summary = form.querySelector("[data-create-location-summary]");
     let noLocationMode = Boolean(noLocationInput?.checked);
-
-    const keyState = await ensureMapTilerKeyState(apiKey);
-    if (!keyState.ok) {
-      enableCreateMapFallback(mapElement, noLocationInput, searchInput, searchButton, summary, keyState.message);
-      mapElement.dataset.mapInitialized = "true";
-      return;
-    }
-
-    sdk.config.apiKey = apiKey;
     mapElement.innerHTML = "";
 
     const defaultCenter = getCreateMapCenter(latitudeInput?.value, longitudeInput?.value);
     const instance = new sdk.Map({
       container: mapElement,
-      style: sdk.MapStyle.STREETS,
-      language: "es",
+      style: buildMapStyle(styleUrl, tilesUrlTemplate, attribution),
+      maxBounds: supportedMapBounds,
       center: defaultCenter.center,
       zoom: defaultCenter.zoom
     });
@@ -1593,11 +1578,11 @@
       mapElement.classList.toggle("is-disabled", enabled);
 
       if (searchInput) {
-        searchInput.disabled = enabled;
+        searchInput.disabled = enabled || !geocodingSearchUrlTemplate;
       }
 
       if (searchButton) {
-        searchButton.disabled = enabled;
+        searchButton.disabled = enabled || !geocodingSearchUrlTemplate;
       }
 
       if (enabled) {
@@ -1632,6 +1617,14 @@
       }
     };
 
+    if (searchInput) {
+      searchInput.disabled = !geocodingSearchUrlTemplate || noLocationMode;
+    }
+
+    if (searchButton) {
+      searchButton.disabled = !geocodingSearchUrlTemplate || noLocationMode;
+    }
+
     const initialLat = numberOrNull(latitudeInput?.value || "");
     const initialLng = numberOrNull(longitudeInput?.value || "");
     if (noLocationMode) {
@@ -1651,11 +1644,11 @@
 
     marker.on("dragend", async () => {
       const position = marker.getLngLat();
-      await resolveCreateLocationFromCoordinates(form, sdk, position.lng, position.lat, syncLocation);
+      await resolveCreateLocationFromCoordinates(reverseGeocodingUrlTemplate, position.lng, position.lat, syncLocation);
     });
 
     instance.on("click", async event => {
-      await resolveCreateLocationFromCoordinates(form, sdk, event.lngLat.lng, event.lngLat.lat, syncLocation);
+      await resolveCreateLocationFromCoordinates(reverseGeocodingUrlTemplate, event.lngLat.lng, event.lngLat.lat, syncLocation);
     });
 
     const runSearch = async () => {
@@ -1666,19 +1659,29 @@
       const query = String(searchInput?.value || "").trim();
       if (!query) return;
 
-      const results = await geocodeCreateLocation(apiKey, query);
+      if (!geocodingSearchUrlTemplate) {
+        if (summary) summary.textContent = "La búsqueda por dirección no está configurada en este entorno.";
+        return;
+      }
+
+      const results = await geocodeCreateLocation(geocodingSearchUrlTemplate, query);
       const feature = results?.[0];
       if (!feature) {
         if (summary) summary.textContent = "No encontramos esa direcciÃ³n. ProbÃ¡ con otra bÃºsqueda.";
         return;
       }
 
+      if (!isWithinSupportedRegion(feature.lng, feature.lat)) {
+        if (summary) summary.textContent = "Por ahora solo admitimos ubicaciones en Argentina, Paraguay y Uruguay.";
+        return;
+      }
+
       syncLocation({
-        lat: feature.center[1],
-        lng: feature.center[0],
+        lat: Number(feature.lat),
+        lng: Number(feature.lng),
         locality: extractLocalityFromFeature(feature),
-        address: feature.place_name,
-        searchValue: feature.place_name
+        address: feature.address,
+        searchValue: feature.address
       });
     };
 
@@ -1699,38 +1702,6 @@
     });
 
     mapElement.dataset.mapInitialized = "true";
-  }
-
-  async function ensureMapTilerKeyState(apiKey) {
-    if (maptilerKeyHealth.has(apiKey)) {
-      return maptilerKeyHealth.get(apiKey);
-    }
-
-    const validationPromise = fetch(`https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(apiKey)}`)
-      .then(response => {
-        if (response.ok) {
-          return { ok: true, message: "" };
-        }
-
-        if (response.status === 401 || response.status === 403) {
-          return {
-            ok: false,
-            message: "La clave de MapTiler no autoriza este origen. Si entras por la IP local, crea una clave que permita 192.168.100.88 o quita la restriccion a localhost."
-          };
-        }
-
-        return {
-          ok: false,
-          message: `MapTiler respondio ${response.status}.`
-        };
-      })
-      .catch(() => ({
-        ok: false,
-        message: "No se pudo conectar con MapTiler."
-      }));
-
-    maptilerKeyHealth.set(apiKey, validationPromise);
-    return validationPromise;
   }
 
   function renderMapPlaceholder(mapElement, title, message) {
@@ -1771,50 +1742,118 @@
   function getCreateMapCenter(latValue, lngValue) {
     const lat = numberOrNull(latValue);
     const lng = numberOrNull(lngValue);
-    if (lat !== null && lng !== null) {
+    if (lat !== null && lng !== null && isWithinSupportedRegion(lng, lat)) {
       return { center: [lng, lat], zoom: 15 };
     }
 
-    return { center: [-64.1888, -31.4201], zoom: 4.5 };
+    return { center: supportedMapCenter, zoom: 4.8 };
   }
 
-  async function resolveCreateLocationFromCoordinates(form, sdk, lng, lat, syncLocation) {
-    const apiKey = form.querySelector("[data-create-map]")?.dataset.maptilerKey;
-    if (!apiKey) return;
+  async function resolveCreateLocationFromCoordinates(reverseGeocodingUrlTemplate, lng, lat, syncLocation) {
+    if (!isWithinSupportedRegion(lng, lat)) {
+      return;
+    }
 
-    const result = await reverseGeocodeCreateLocation(apiKey, lng, lat);
-    const feature = result?.[0];
+    const feature = await reverseGeocodeCreateLocation(reverseGeocodingUrlTemplate, lng, lat);
     syncLocation({
       lat,
       lng,
       locality: feature ? extractLocalityFromFeature(feature) : "",
-      address: feature?.place_name || "",
-      searchValue: feature?.place_name || ""
+      address: feature?.address || "",
+      searchValue: feature?.address || ""
     });
   }
 
-  async function geocodeCreateLocation(apiKey, query) {
-    const response = await fetch(`https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${encodeURIComponent(apiKey)}&language=es&limit=1`);
+  async function geocodeCreateLocation(geocodingSearchUrlTemplate, query) {
+    const endpoint = geocodingSearchUrlTemplate.replace("{query}", encodeURIComponent(query));
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
     if (!response.ok) return [];
     const payload = await response.json();
-    return payload?.features || [];
+    return Array.isArray(payload) ? payload.map(normalizeNominatimFeature) : [];
   }
 
-  async function reverseGeocodeCreateLocation(apiKey, lng, lat) {
-    const response = await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${encodeURIComponent(apiKey)}&language=es&limit=1`);
-    if (!response.ok) return [];
+  async function reverseGeocodeCreateLocation(reverseGeocodingUrlTemplate, lng, lat) {
+    if (!reverseGeocodingUrlTemplate) return null;
+
+    const endpoint = reverseGeocodingUrlTemplate
+      .replace("{lng}", encodeURIComponent(String(lng)))
+      .replace("{lat}", encodeURIComponent(String(lat)));
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    if (!response.ok) return null;
     const payload = await response.json();
-    return payload?.features || [];
+    return normalizeNominatimFeature(payload);
   }
 
   function extractLocalityFromFeature(feature) {
-    const context = Array.isArray(feature?.context) ? feature.context : [];
-    const localityNode = context.find(item => {
-      const id = String(item?.id || "");
-      return id.startsWith("place.") || id.startsWith("locality.") || id.startsWith("municipality.") || id.startsWith("region.");
-    });
+    const address = feature?.rawAddress || feature?.addressParts || {};
+    return address.city
+      || address.town
+      || address.village
+      || address.municipality
+      || address.suburb
+      || address.county
+      || feature?.displayName
+      || feature?.address
+      || "";
+  }
 
-    return localityNode?.text || feature?.text || feature?.place_name || "";
+  function normalizeNominatimFeature(feature) {
+    if (!feature) return null;
+
+    const latitude = Number.parseFloat(feature.lat);
+    const longitude = Number.parseFloat(feature.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+
+    return {
+      lat: latitude,
+      lng: longitude,
+      address: feature.display_name || "",
+      displayName: feature.display_name || "",
+      rawAddress: feature.address || {},
+      addressParts: feature.address || {}
+    };
+  }
+
+  function buildMapStyle(styleUrl, tilesUrlTemplate, attribution) {
+    if (styleUrl) {
+      return styleUrl;
+    }
+
+    return {
+      version: 8,
+      sources: {
+        "osm-raster": {
+          type: "raster",
+          tiles: [tilesUrlTemplate],
+          tileSize: 256,
+          attribution
+        }
+      },
+      layers: [
+        {
+          id: "osm-raster",
+          type: "raster",
+          source: "osm-raster"
+        }
+      ]
+    };
+  }
+
+  function isWithinSupportedRegion(lng, lat) {
+    return lng >= supportedMapBounds[0][0]
+      && lng <= supportedMapBounds[1][0]
+      && lat >= supportedMapBounds[0][1]
+      && lat <= supportedMapBounds[1][1];
   }
 
   function formatCreateLocationSummary(location) {

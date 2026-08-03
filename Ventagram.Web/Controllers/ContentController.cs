@@ -109,7 +109,11 @@ public class ContentController(
             CanManageFavorites = currentUserAccessor.IsAuthenticated,
             FavoritePublicationIds = favoritePublicationIds,
             FavoriteLists = favoriteLists,
-            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            MapStyleUrl = configuration["Map:StyleUrl"] ?? string.Empty,
+            MapTilesUrlTemplate = configuration["Map:TilesUrlTemplate"] ?? string.Empty,
+            MapAttributionHtml = configuration["Map:AttributionHtml"] ?? string.Empty,
+            MapGeocodingSearchUrlTemplate = configuration["Map:GeocodingSearchUrlTemplate"] ?? string.Empty,
+            MapReverseGeocodingUrlTemplate = configuration["Map:ReverseGeocodingUrlTemplate"] ?? string.Empty,
             FlashMessage = flash,
             GalleryApiEndpoint = BuildGalleryApiEndpoint(selectedGroupName, query, filters),
             MarkersJson = JsonSerializer.Serialize(publications
@@ -211,7 +215,11 @@ public class ContentController(
             CanManageFavorites = currentUserAccessor.IsAuthenticated,
             FavoritePublicationIds = favoritePublicationIds,
             FavoriteLists = favoriteLists,
-            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            MapStyleUrl = configuration["Map:StyleUrl"] ?? string.Empty,
+            MapTilesUrlTemplate = configuration["Map:TilesUrlTemplate"] ?? string.Empty,
+            MapAttributionHtml = configuration["Map:AttributionHtml"] ?? string.Empty,
+            MapGeocodingSearchUrlTemplate = configuration["Map:GeocodingSearchUrlTemplate"] ?? string.Empty,
+            MapReverseGeocodingUrlTemplate = configuration["Map:ReverseGeocodingUrlTemplate"] ?? string.Empty,
             FlashMessage = flash,
             GalleryApiEndpoint = BuildGalleryApiEndpoint(selectedGroupName, query, filters),
             MarkersJson = JsonSerializer.Serialize(publications
@@ -386,7 +394,9 @@ public class ContentController(
         var model = new PublicationDetailsContentViewModel
         {
             Publication = await publicationService.GetByIdAsync(id),
-            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            MapStyleUrl = configuration["Map:StyleUrl"] ?? string.Empty,
+            MapTilesUrlTemplate = configuration["Map:TilesUrlTemplate"] ?? string.Empty,
+            MapAttributionHtml = configuration["Map:AttributionHtml"] ?? string.Empty,
             IsAuthenticated = currentUserAccessor.IsAuthenticated,
             CurrentUserId = currentUserAccessor.UserId
         };
@@ -433,7 +443,11 @@ public class ContentController(
             PublishingBlockedMessage = user is not null && !user.CanPublish
                 ? "Tu cuenta no puede publicar nuevos anuncios hasta que un administrador revise el anuncio denunciado."
                 : null,
-            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty
+            MapStyleUrl = configuration["Map:StyleUrl"] ?? string.Empty,
+            MapTilesUrlTemplate = configuration["Map:TilesUrlTemplate"] ?? string.Empty,
+            MapAttributionHtml = configuration["Map:AttributionHtml"] ?? string.Empty,
+            MapGeocodingSearchUrlTemplate = configuration["Map:GeocodingSearchUrlTemplate"] ?? string.Empty,
+            MapReverseGeocodingUrlTemplate = configuration["Map:ReverseGeocodingUrlTemplate"] ?? string.Empty
         };
 
         return PartialView("~/Views/Content/Create.cshtml", model);
@@ -507,7 +521,11 @@ public class ContentController(
             CurrentUserEmail = user.Email,
             CurrentUserPhone = user.Phone,
             SuggestedLocalityLabel = string.IsNullOrWhiteSpace(publication.Locality) ? null : publication.Locality,
-            MapTilerKey = configuration["MapTiler:ApiKey"] ?? string.Empty,
+            MapStyleUrl = configuration["Map:StyleUrl"] ?? string.Empty,
+            MapTilesUrlTemplate = configuration["Map:TilesUrlTemplate"] ?? string.Empty,
+            MapAttributionHtml = configuration["Map:AttributionHtml"] ?? string.Empty,
+            MapGeocodingSearchUrlTemplate = configuration["Map:GeocodingSearchUrlTemplate"] ?? string.Empty,
+            MapReverseGeocodingUrlTemplate = configuration["Map:ReverseGeocodingUrlTemplate"] ?? string.Empty,
             FormEyebrow = "Mis anuncios",
             FormTitle = "Editar anuncio",
             FormDescription = "Modifica los mismos datos que usas al crear un anuncio, incluyendo imagenes, video, ubicacion y ficha tecnica.",
