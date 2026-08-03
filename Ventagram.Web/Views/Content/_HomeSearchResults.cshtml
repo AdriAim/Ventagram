@@ -1,6 +1,6 @@
 @model HomeContentViewModel
 @{
-    var currentMode = string.IsNullOrWhiteSpace(Model.Mode) ? "Galeria" : Model.Mode;
+    var currentMode = string.IsNullOrWhiteSpace(Model.Mode) ? "Galería" : Model.Mode;
     var currentGroup = string.IsNullOrWhiteSpace(Model.Group) ? "Inmuebles" : Model.Group;
     var previousPage = Math.Max(1, Model.Page - 1);
     var nextPage = Math.Min(Math.Max(1, Model.TotalPages), Model.Page + 1);
@@ -47,7 +47,7 @@
             <select name="mode">
                 <option selected="@(currentMode == "Mapa")">Mapa</option>
                 <option selected="@(currentMode == "Texto")">Texto</option>
-                <option selected="@(currentMode == "Galeria")">Galería</option>
+                <option selected="@(currentMode == "Galería")">Galería</option>
             </select>
         </label>
         @if (currentMode == "Texto")
@@ -100,7 +100,7 @@
     </section>
 }
 
-@if (currentMode != "Galeria" && !Model.Publications.Any())
+@if (currentMode != "Galería" && !Model.Publications.Any())
 {
     <section class="empty-state">
         <h2>No hay resultados para esa búsqueda.</h2>
@@ -164,12 +164,12 @@ else if (currentMode == "Texto")
             var publicationCode = item.ToAdCode();
             <article class="classified-row">
                 <div>
-                    <span class="card-meta">@item.Group · @(item.Category?.Name ?? "Sin categoria") · @item.Locality</span>
+                    <span class="card-meta">@item.Group · @(item.Category?.Name ?? "Sin categoría") · @item.Locality</span>
                     <h3><a href="/Publications/Details/@item.Id" class="publication-preview-trigger" data-publication-id="@item.Id" data-details-url="/api/content/details/@item.Id">@item.Title</a></h3>
                     <p>@item.ShortDescription</p>
                 </div>
                 <div class="classified-side">
-                    <strong>@item.Currency @item.Price.ToString("N0")</strong>
+                    <strong>@item.Currency @item.Price.ToString("0")</strong>
                     <button type="button"
                             class="favorite-toggle favorite-toggle-inline @(Model.FavoritePublicationIds.Contains(item.Id) ? "is-active" : "")"
                             data-favorite-toggle="true"

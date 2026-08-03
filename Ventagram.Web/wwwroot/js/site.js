@@ -1348,6 +1348,7 @@
       zoom: mapMode === "detail" ? 17.5 : (hasInitialCenter ? 11 : 5)
     });
     const selectionPanel = mapElement.parentElement?.querySelector("[data-map-selection-card]");
+    const selectionViewToggle = mapElement.parentElement?.querySelector("[data-map-selection-view-toggle]");
     const hoverPopup = new sdk.Popup({
       closeButton: false,
       closeOnClick: false,
@@ -1360,23 +1361,66 @@
       offset: 20,
       className: "map-tap-popup"
     });
-    const setSelectedMarker = marker => {
-      if (!selectionPanel || !marker) return;
-      selectionPanel.innerHTML = buildGalleryCard({
-        id: marker.id,
-        title: marker.title,
-        galleryTitle: String(marker.title || "").split(" - oportunidad")[0],
-        publicationCode: marker.code,
-        price: marker.price,
-        detailsUrl: marker.detailsUrl,
-        videoUrl: marker.videoUrl,
-        images: Array.isArray(marker.images) && marker.images.length
-          ? marker.images
-          : [marker.image || "/images/logo4.png"]
-      }, false);
+    let selectedMarker = null;
+    let selectedMarkerView = selectionViewToggle?.dataset.currentView === "text" ? "text" : "gallery";
+
+    const syncSelectionViewButtons = () => {
+      selectionViewToggle?.querySelectorAll("[data-map-selection-view]").forEach(button => {
+        const isActive = button.dataset.mapSelectionView === selectedMarkerView;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    };
+
+    const renderSelectedMarker = () => {
+      if (!selectionPanel || !selectedMarker) return;
+
+      selectionPanel.innerHTML = selectedMarkerView === "text"
+        ? buildMapSelectionTextCard(selectedMarker)
+        : buildGalleryCard({
+            id: selectedMarker.id,
+            title: selectedMarker.title,
+            galleryTitle: String(selectedMarker.title || "").split(" - oportunidad")[0],
+            publicationCode: selectedMarker.code,
+            price: selectedMarker.price,
+            detailsUrl: selectedMarker.detailsUrl,
+            videoUrl: selectedMarker.videoUrl,
+            images: Array.isArray(selectedMarker.images) && selectedMarker.images.length
+              ? selectedMarker.images
+              : [selectedMarker.image || "/images/logo4.png"],
+            isFavorite: Boolean(selectedMarker.isFavorite),
+            groupName: selectedMarker.groupName || "Inmuebles"
+          }, false);
+
       wireGalleryCards();
+      wireFavoriteActions(selectionPanel);
+      wireReportForm();
       syncMobileGalleryVideoAutoplay(selectionPanel);
     };
+
+    const setSelectedMarker = marker => {
+      if (!selectionPanel || !marker) return;
+      selectedMarker = marker;
+      renderSelectedMarker();
+    };
+
+    if (selectionViewToggle && selectionViewToggle.dataset.bound !== "true") {
+      selectionViewToggle.dataset.bound = "true";
+      selectionViewToggle.querySelectorAll("[data-map-selection-view]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          const nextView = button.dataset.mapSelectionView === "text" ? "text" : "gallery";
+          if (nextView === selectedMarkerView) return;
+
+          selectedMarkerView = nextView;
+          selectionViewToggle.dataset.currentView = selectedMarkerView;
+          syncSelectionViewButtons();
+          renderSelectedMarker();
+        });
+      });
+    }
+
+    syncSelectionViewButtons();
     const handleMarkerSelection = marker => {
       if (isMobileMapInteractionContext()) {
         hoverPopup.remove();
@@ -2106,6 +2150,41 @@
           Mostrar anuncio
         </button>
       </div>
+    `;
+  }
+
+  function buildMapSelectionTextCard(marker) {
+    const rawTitle = stripOpportunitySuffix(marker?.title || "");
+    const title = escapeHtml(rawTitle);
+    const price = escapeHtml(marker?.price || "");
+    const location = escapeHtml(marker?.locality || "Ubicación no informada");
+    const shortDescription = escapeHtml(marker?.shortDescription || "Sin descripción breve.");
+    const detailsUrl = escapeAttribute(marker?.detailsUrl || "#");
+    const publicationId = escapeAttribute(marker?.id || "");
+    const publicationCode = escapeAttribute(marker?.code || "");
+    const isFavorite = Boolean(marker?.isFavorite);
+    const suggestedListName = escapeAttribute(marker?.groupName || "Inmuebles");
+
+    return `
+      <article class="map-selection-text-card">
+        <div class="map-selection-text-meta">
+          <p class="map-selection-text-location">${location}</p>
+          <span class="map-selection-text-price">${price || "Precio sin informar"}</span>
+        </div>
+        <h3 class="map-selection-text-title">${title || "Publicación"}</h3>
+        <p class="map-selection-text-description">${shortDescription}</p>
+        <div class="map-selection-text-actions">
+          <a href="${detailsUrl}" class="primary-pill compact map-selection-text-link publication-preview-trigger" data-publication-id="${publicationId}" data-details-url="/api/content/details/${publicationId}">
+            Ver anuncio
+          </a>
+          <button type="button" class="favorite-toggle ghost-pill compact ${isFavorite ? "is-active" : ""}" data-favorite-toggle="true" data-publication-id="${publicationId}" data-publication-title="${title}" data-suggested-list-name="${suggestedListName}" title="Añadir a mi lista de favoritos" aria-label="Añadir a mi lista de favoritos">
+            ${renderFavoriteIcon(isFavorite)}
+          </button>
+          <button type="button" class="ghost-pill compact map-selection-text-report report-trigger" data-publication-id="${publicationId}" data-publication-code="${publicationCode}" data-publication-title="${title}">
+            Denunciar
+          </button>
+        </div>
+      </article>
     `;
   }
 
@@ -4304,7 +4383,7 @@
       const payload = await response.json();
       syncChatUnreadBadges(Number(payload?.unreadCount || 0));
     } catch (error) {
-      console.error(error);
+      console.warn(buildChatNetworkErrorMessage(url, error));
     }
   }
 
@@ -4375,7 +4454,8 @@
 
         window.location.href = payload.redirectUrl || "/Mensajes";
       } catch (error) {
-        window.alert(error.message || "No se pudo abrir el chat.");
+        const fallbackMessage = buildChatNetworkErrorMessage(url, error);
+        window.alert(error?.message && error.message !== "Failed to fetch" ? error.message : fallbackMessage);
       } finally {
         button.disabled = false;
       }
@@ -4393,6 +4473,37 @@
     }
 
     return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  }
+
+  function buildChatNetworkErrorMessage(url, error) {
+    const rawMessage = String(error?.message || "").trim();
+    if (rawMessage && rawMessage !== "Failed to fetch") {
+      return rawMessage;
+    }
+
+    const origin = getOriginLabel(url);
+    if (origin && isLocalhostOrigin(origin)) {
+      return `No se pudo conectar al servicio de chat en ${origin}. En debug inicia Ventagram.ChatService junto con Ventagram.Web.`;
+    }
+
+    return "No se pudo conectar con el servicio de chat.";
+  }
+
+  function getOriginLabel(url) {
+    try {
+      return new URL(url).origin;
+    } catch {
+      return "";
+    }
+  }
+
+  function isLocalhostOrigin(origin) {
+    try {
+      const parsed = new URL(origin);
+      return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+    } catch {
+      return false;
+    }
   }
 
   function serializeCreateForm(form) {

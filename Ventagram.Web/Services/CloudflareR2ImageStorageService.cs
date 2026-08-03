@@ -95,6 +95,35 @@ public sealed class CloudflareR2ImageStorageService
         return BuildPublicUrl(options.PublicBaseUrl, key);
     }
 
+    public async Task DeletePublicObjectsAsync(IEnumerable<string> urls, CancellationToken cancellationToken = default)
+    {
+        var options = GetOptions();
+        ValidateConfiguration(options);
+
+        var keys = urls
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => TryExtractManagedObjectKey(url!, options.PublicBaseUrl))
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var key in keys)
+        {
+            try
+            {
+                await _client.Value.DeleteObjectAsync(new DeleteObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = key
+                }, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "No se pudo borrar el objeto {ObjectKey} de R2.", key);
+            }
+        }
+    }
+
     private async Task<string> ProcessAndUploadAsync(IFormFile file, R2Options options, CancellationToken cancellationToken)
     {
         await using var inputStream = file.OpenReadStream();
@@ -242,6 +271,24 @@ public sealed class CloudflareR2ImageStorageService
     private static string BuildPublicUrl(string publicBaseUrl, string key)
     {
         return $"{publicBaseUrl.TrimEnd('/')}/{key.TrimStart('/')}";
+    }
+
+    private static string? TryExtractManagedObjectKey(string url, string publicBaseUrl)
+    {
+        var normalizedBaseUrl = publicBaseUrl.Trim().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalizedBaseUrl))
+        {
+            return null;
+        }
+
+        var normalizedUrl = url.Trim();
+        if (!normalizedUrl.StartsWith(normalizedBaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var key = normalizedUrl[normalizedBaseUrl.Length..].TrimStart('/');
+        return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
     private static int ResolveWebpQuality(long originalBytes, R2Options options)

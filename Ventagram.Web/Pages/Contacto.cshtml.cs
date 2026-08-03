@@ -8,8 +8,6 @@ namespace Ventagram.Pages;
 
 public class ContactoModel(IEmailSender emailSender, IConfiguration configuration) : PageModel
 {
-    private const string ContactRecipient = "contacto.ventagram@gmail.com";
-
     [BindProperty]
     public InputModel Input { get; set; } = new();
 
@@ -40,6 +38,13 @@ public class ContactoModel(IEmailSender emailSender, IConfiguration configuratio
         var safeEmail = WebUtility.HtmlEncode(Input.Email);
         var safeSubject = WebUtility.HtmlEncode(Input.Subject);
         var safeMessage = WebUtility.HtmlEncode(Input.Message).Replace("\n", "<br />");
+        var contactRecipient = configuration["Email:ContactRecipient"]?.Trim();
+
+        if (string.IsNullOrWhiteSpace(contactRecipient))
+        {
+            ModelState.AddModelError(string.Empty, "El destinatario del formulario de contacto no esta configurado.");
+            return Page();
+        }
 
         var subject = $"Contacto Ventagram: {Input.Subject.Trim()}";
         var html = $"""
@@ -63,7 +68,7 @@ public class ContactoModel(IEmailSender emailSender, IConfiguration configuratio
         bool sent;
         try
         {
-            sent = await emailSender.SendAsync(ContactRecipient, subject, html, text);
+            sent = await emailSender.SendAsync(contactRecipient, subject, html, text);
         }
         catch
         {

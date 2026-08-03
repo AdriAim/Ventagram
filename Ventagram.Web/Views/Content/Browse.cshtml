@@ -1,6 +1,6 @@
 @model HomeContentViewModel
 @{
-    var currentMode = string.IsNullOrWhiteSpace(Model.Mode) ? "Galeria" : Model.Mode;
+    var currentMode = string.IsNullOrWhiteSpace(Model.Mode) ? "Galería" : Model.Mode;
     var currentGroup = string.IsNullOrWhiteSpace(Model.Group) ? "Inmuebles" : Model.Group;
     var previousPage = Math.Max(1, Model.Page - 1);
     var nextPage = Math.Min(Math.Max(1, Model.TotalPages), Model.Page + 1);
@@ -105,13 +105,13 @@
             <select name="mode">
                 <option selected="@(currentMode == "Mapa")">Mapa</option>
                 <option selected="@(currentMode == "Texto")">Texto</option>
-                <option selected="@(currentMode == "Galeria")">Galería</option>
+                <option selected="@(currentMode == "Galería")">Galería</option>
             </select>
         </label>
         <div class="price-range-filter" data-price-range-filter data-price-max="@priceSliderMax.ToString(System.Globalization.CultureInfo.InvariantCulture)">
             <div class="price-range-head">
                 <span>Precio</span>
-                <strong><span data-price-from-label>@priceFromValue.ToString("N0")</span> - <span data-price-to-label>@priceToValue.ToString("N0")</span></strong>
+                <strong><span data-price-from-label>@priceFromValue.ToString("0")</span> - <span data-price-to-label>@priceToValue.ToString("0")</span></strong>
             </div>
             <input type="hidden" name="priceFrom" value="@priceFromValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-price-from-value />
             <input type="hidden" name="priceTo" value="@priceToValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-price-to-value />
@@ -129,7 +129,7 @@
         <input type="hidden" name="page" value="1" />
         <div class="required-filter-panel" data-required-filter-panel hidden="@(!filterFields.Any())">
             <div class="required-filter-heading">
-                <strong>Mas filtros</strong>
+                <strong>Más filtros</strong>
             </div>
             <div class="required-filter-list" data-required-filter-list>
                 @foreach (var field in filterFields)
@@ -152,7 +152,7 @@
                         {
                             <select name="filterValue">
                                 <option value="">Todos</option>
-                                <option value="true" selected="@(string.Equals(selectedValue, "true", StringComparison.OrdinalIgnoreCase))">Si</option>
+                                <option value="true" selected="@(string.Equals(selectedValue, "true", StringComparison.OrdinalIgnoreCase))">Sí</option>
                                 <option value="false" selected="@(string.Equals(selectedValue, "false", StringComparison.OrdinalIgnoreCase))">No</option>
                             </select>
                         }
@@ -210,7 +210,7 @@
     </section>
 }
 
-@if (currentMode != "Galeria" && !Model.Publications.Any())
+@if (currentMode != "Galería" && !Model.Publications.Any())
 {
     <section class="empty-state" data-browse-scroll-target>
         <h2>No hay resultados para esa búsqueda.</h2>
@@ -274,12 +274,12 @@ else if (currentMode == "Texto")
             var publicationCode = item.ToAdCode();
             <article class="classified-row">
                 <div>
-                    <span class="card-meta">@item.Group · @(item.Category?.Name ?? "Sin categoria") · @item.Locality</span>
+                    <span class="card-meta">@item.Group · @(item.Category?.Name ?? "Sin categoría") · @item.Locality</span>
                     <h3><a href="/Publications/Details/@item.Id" class="publication-preview-trigger" data-publication-id="@item.Id" data-details-url="/api/content/details/@item.Id">@item.Title</a></h3>
                     <p>@item.ShortDescription</p>
                 </div>
                 <div class="classified-side">
-                    <strong>@item.Currency @item.Price.ToString("N0")</strong>
+                    <strong>@item.Currency @item.Price.ToString("0")</strong>
                     <button type="button"
                             class="favorite-toggle favorite-toggle-inline @(Model.FavoritePublicationIds.Contains(item.Id) ? "is-active" : "")"
                             data-favorite-toggle="true"

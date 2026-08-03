@@ -1,7 +1,8 @@
 @page
 @model IndexModel
 @{
-    ViewData["Title"] = "Encontrá inmuebles, rodados y anuncios";
+    ViewData["Title"] = "Compra venta Argentina de inmuebles, rodados y anuncios";
+    ViewData["MetaDescription"] = "Compra venta Argentina en Ventagram. Publica anuncios clasificados de inmuebles, rodados y mas con precios visibles, mapa, galeria y texto.";
     var endpoint = $"/api/content/home?group={Uri.EscapeDataString(Model.Group)}&mode={Uri.EscapeDataString(Model.Mode)}&query={Uri.EscapeDataString(Model.Query ?? string.Empty)}";
 }
 

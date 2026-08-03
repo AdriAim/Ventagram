@@ -34,7 +34,7 @@ else
             <p>@publication.ShortDescription</p>
         </div>
         <div class="price-panel">
-            <strong>@publication.Currency @publication.Price.ToString("N0")</strong>
+            <strong>@publication.Currency @publication.Price.ToString("0")</strong>
             <span>@publication.Locality</span>
             <span>@publication.ContactName</span>
         </div>
@@ -184,7 +184,7 @@ else
                              detailsUrl = $"/Publications/Details/{publication.Id}",
                              lat = publication.Latitude,
                              lng = publication.Longitude,
-                             price = $"{publication.Currency} {publication.Price:N0}"
+                             price = $"{publication.Currency} {publication.Price:0}"
                          }
                      }))'></div>
             }

@@ -16,10 +16,10 @@ public class MyPublicationsModel(
 {
     public static readonly IReadOnlyList<string> DeactivationReasons =
     [
-        "Ya se vendió",
-        "Ya no está disponible",
+        "Ya se vendio",
+        "Ya no esta disponible",
         "Quiero corregir el anuncio",
-        "Publiqué por error",
+        "Publique por error",
         "Otro motivo"
     ];
 
@@ -103,11 +103,31 @@ public class MyPublicationsModel(
         var success = await publicationService.RepublishOwnedAsync(id, userId);
         if (success)
         {
-            SuccessMessage = "El anuncio fue republicado por 30 días más.";
+            SuccessMessage = "El anuncio fue republicado por 30 dias mas.";
         }
         else
         {
             ErrorMessage = "No se pudo republicar el anuncio indicado.";
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDeletePermanentAsync(int id)
+    {
+        if (currentUserAccessor.UserId is not int userId)
+        {
+            return RedirectToPage("/Account/Login", new { returnUrl = Url.Page("/MyPublications") });
+        }
+
+        var success = await publicationService.DeleteOwnedPermanentlyAsync(id, userId);
+        if (success)
+        {
+            SuccessMessage = "El anuncio fue eliminado definitivamente junto con sus archivos.";
+        }
+        else
+        {
+            ErrorMessage = "No se pudo eliminar definitivamente el anuncio indicado.";
         }
 
         return RedirectToPage();

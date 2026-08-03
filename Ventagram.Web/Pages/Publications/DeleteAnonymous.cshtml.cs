@@ -19,10 +19,10 @@ public class DeleteAnonymousModel(PublicationService publicationService) : PageM
             return Page();
         }
 
-        var success = await publicationService.DeactivateAnonymousAsync(Input.PublicationId, Input.Password);
+        var success = await publicationService.DeleteAnonymousPermanentlyAsync(Input.PublicationId, Input.Password);
         StatusMessage = success
-            ? "El anuncio fue dado de baja."
-            : "No se pudo dar de baja. Revisá ID y contraseña.";
+            ? "El anuncio fue eliminado definitivamente."
+            : "No se pudo eliminar. Revisa ID y contraseña.";
         return Page();
     }
 

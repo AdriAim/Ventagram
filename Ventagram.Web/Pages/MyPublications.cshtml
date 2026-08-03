@@ -28,7 +28,7 @@
 {
     <div class="status-banner civic-banner">
         <strong>Acceso administrativo activo.</strong>
-        <span><a href="/Trash">Ir a la bandeja de revisión</a></span>
+        <span><a href="/Trash">Ir a la bandeja de revision</a></span>
     </div>
 }
 
@@ -77,7 +77,7 @@ else
                         </div>
                         <span class="publication-admin-status @(publication.IsActive ? "is-active" : "is-inactive")">@statusLabel</span>
                     </div>
-                    <p class="publication-admin-price">@publication.Currency @publication.Price.ToString("N0")</p>
+                    <p class="publication-admin-price">@publication.Currency @publication.Price.ToString("0")</p>
                     <p>@publication.ShortDescription</p>
                     <div class="publication-admin-meta">
                         <span>@(string.IsNullOrWhiteSpace(publication.Locality) ? "Sin ubicacion publica" : publication.Locality)</span>
@@ -116,7 +116,10 @@ else
                         else
                         {
                             <form method="post" asp-page-handler="Republish" asp-route-id="@publication.Id">
-                                <button type="submit" class="primary-pill">Republicar 30 días</button>
+                                <button type="submit" class="primary-pill">Republicar 30 dias</button>
+                            </form>
+                            <form method="post" asp-page-handler="DeletePermanent" asp-route-id="@publication.Id" onsubmit="return confirm('Esta accion eliminara definitivamente el anuncio y sus archivos.');">
+                                <button type="submit" class="danger-pill">Eliminar definitivamente</button>
                             </form>
                         }
                     </div>

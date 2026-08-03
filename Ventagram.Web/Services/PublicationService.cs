@@ -5,7 +5,10 @@ using Ventagram.ViewModels;
 
 namespace Ventagram.Services;
 
-public class PublicationService(VentagramDbContext db)
+public class PublicationService(
+    VentagramDbContext db,
+    CloudflareR2ImageStorageService imageStorageService,
+    ILogger<PublicationService> logger)
 {
     public Task<List<Publication>> SearchActivePublicationsAsync(PublicationGroup? group, string? query)
         => SearchActivePublicationsAsync(group, query, null);
@@ -296,9 +299,11 @@ public class PublicationService(VentagramDbContext db)
         return errors;
     }
 
-    public async Task<bool> DeactivateAnonymousAsync(int publicationId, string password)
+    public async Task<bool> DeleteAnonymousPermanentlyAsync(int publicationId, string password)
     {
-        var publication = await db.Publications.FirstOrDefaultAsync(x => x.Id == publicationId && x.IsAnonymous && x.IsActive);
+        var publication = await db.Publications
+            .Include(x => x.MediaItems)
+            .FirstOrDefaultAsync(x => x.Id == publicationId && x.IsAnonymous);
         if (publication is null || string.IsNullOrWhiteSpace(publication.AnonymousDeletePasswordHash))
         {
             return false;
@@ -309,9 +314,15 @@ public class PublicationService(VentagramDbContext db)
             return false;
         }
 
-        publication.IsActive = false;
-        publication.Status = "Baja solicitada";
+        var mediaUrls = publication.MediaItems
+            .Select(x => x.Url)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        db.Publications.Remove(publication);
         await db.SaveChangesAsync();
+        await SafeDeleteMediaFromStorageAsync(mediaUrls);
         return true;
     }
 
@@ -332,6 +343,28 @@ public class PublicationService(VentagramDbContext db)
         return true;
     }
 
+    public async Task<bool> DeleteOwnedPermanentlyAsync(int publicationId, int userId)
+    {
+        var publication = await db.Publications
+            .Include(x => x.MediaItems)
+            .FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId && !x.IsActive);
+        if (publication is null)
+        {
+            return false;
+        }
+
+        var mediaUrls = publication.MediaItems
+            .Select(x => x.Url)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        db.Publications.Remove(publication);
+        await db.SaveChangesAsync();
+        await SafeDeleteMediaFromStorageAsync(mediaUrls);
+        return true;
+    }
+
     public async Task<bool> RepublishOwnedAsync(int publicationId, int userId)
     {
         var publication = await db.Publications.FirstOrDefaultAsync(x => x.Id == publicationId && x.UserId == userId && !x.IsActive);
@@ -339,6 +372,12 @@ public class PublicationService(VentagramDbContext db)
         {
             return false;
         }
+
+        var previousMediaUrls = publication.MediaItems
+            .Select(x => x.Url)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (publication.ModerationStatus is "PendingReview" or "Confirmed")
         {
@@ -427,6 +466,12 @@ public class PublicationService(VentagramDbContext db)
             return false;
         }
 
+        var previousMediaUrls = publication.MediaItems
+            .Select(x => x.Url)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         var normalizedLocality = input.NoLocation ? string.Empty : input.Locality.Trim();
         var localityChanged = !string.Equals((publication.Locality ?? string.Empty).Trim(), normalizedLocality, StringComparison.Ordinal);
         var category = await db.PublicationCategories
@@ -468,12 +513,22 @@ public class PublicationService(VentagramDbContext db)
             publication.Longitude = input.Longitude;
         }
 
-        db.RemoveRange(publication.MediaItems);
-        publication.MediaItems.Clear();
-        publication.MediaItems.AddRange(PublicationMediaBuilder.Build(
+        var nextMediaItems = PublicationMediaBuilder.Build(
             input.ImagesCsv,
             input.VideoUrl,
-            publication.CreatedAtUtc));
+            publication.CreatedAtUtc);
+        var nextMediaUrls = nextMediaItems
+            .Select(x => x.Url)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var removedMediaUrls = previousMediaUrls
+            .Except(nextMediaUrls, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        db.RemoveRange(publication.MediaItems);
+        publication.MediaItems.Clear();
+        publication.MediaItems.AddRange(nextMediaItems);
 
         db.RemoveRange(publication.FieldValues);
         publication.FieldValues.Clear();
@@ -483,7 +538,29 @@ public class PublicationService(VentagramDbContext db)
         }
 
         await db.SaveChangesAsync();
+        await SafeDeleteMediaFromStorageAsync(removedMediaUrls);
         return true;
+    }
+
+    private async Task SafeDeleteMediaFromStorageAsync(IEnumerable<string> urls)
+    {
+        var mediaUrls = urls
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (mediaUrls.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await imageStorageService.DeletePublicObjectsAsync(mediaUrls);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "No se pudieron borrar algunos medios de R2.");
+        }
     }
 
     private IQueryable<Publication> BuildActiveSearchQuery(PublicationGroup? group, string? query, PublicationSearchFilters? filters = null)

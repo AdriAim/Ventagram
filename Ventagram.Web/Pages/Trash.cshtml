@@ -70,7 +70,7 @@
                         </p>
                     </div>
                     <div class="classified-side">
-                        <strong>@publication.Currency @publication.Price.ToString("N0")</strong>
+                        <strong>@publication.Currency @publication.Price.ToString("0")</strong>
                         <span>@(publication.TrashedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
                         <form method="post" asp-page-handler="Restore" asp-route-id="@publication.Id">
                             <button type="submit" class="ghost-pill">Restaurar y habilitar</button>
@@ -120,7 +120,7 @@
                         }
                     </div>
                     <div class="classified-side">
-                        <strong>@publication.Currency @publication.Price.ToString("N0")</strong>
+                        <strong>@publication.Currency @publication.Price.ToString("0")</strong>
                         <span>@(publication.DeactivatedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
                     </div>
                 </article>

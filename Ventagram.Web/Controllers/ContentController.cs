@@ -122,14 +122,18 @@ public class ContentController(
                 {
                     id = x.Id,
                     code = x.ToAdCode(),
+                    groupName = x.Group,
                     videoUrl = x.PrimaryVideoUrl,
                     title = x.Title,
+                    shortDescription = x.ShortDescription,
+                    locality = x.Locality,
+                    isFavorite = favoritePublicationIds.Contains(x.Id),
                     image = x.ImageList.FirstOrDefault(),
                     images = x.ImageList.Take(11).ToList(),
                     detailsUrl = $"/Publications/Details/{x.Id}",
                     lat = x.Latitude,
                     lng = x.Longitude,
-                    price = $"{x.Currency} {x.Price:N0}"
+                    price = $"{x.Currency} {x.Price:0}"
                 }))
         };
 
@@ -228,14 +232,18 @@ public class ContentController(
                 {
                     id = x.Id,
                     code = x.ToAdCode(),
+                    groupName = x.Group,
                     videoUrl = x.PrimaryVideoUrl,
                     title = x.Title,
+                    shortDescription = x.ShortDescription,
+                    locality = x.Locality,
+                    isFavorite = favoritePublicationIds.Contains(x.Id),
                     image = x.ImageList.FirstOrDefault(),
                     images = x.ImageList.Take(11).ToList(),
                     detailsUrl = $"/Publications/Details/{x.Id}",
                     lat = x.Latitude,
                     lng = x.Longitude,
-                    price = $"{x.Currency} {x.Price:N0}"
+                    price = $"{x.Currency} {x.Price:0}"
                 }))
         };
 
@@ -1167,7 +1175,7 @@ public class ContentController(
             title = item.Title,
             galleryTitle = item.Title.Split(" - oportunidad", StringSplitOptions.TrimEntries)[0],
             publicationCode = item.ToAdCode(),
-            price = $"{item.Currency} {item.Price:N0}",
+            price = $"{item.Currency} {item.Price:0}",
             detailsUrl = $"/Publications/Details/{item.Id}",
             videoUrl = item.PrimaryVideoUrl,
             images,

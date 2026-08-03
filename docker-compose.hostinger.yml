@@ -51,6 +51,7 @@ services:
       Email__SmtpUser: ${SMTP_USER}
       Email__SmtpPassword: ${SMTP_PASSWORD}
       Email__FromEmail: ${SMTP_FROM_EMAIL}
+      Email__ContactRecipient: ${SMTP_CONTACT_RECIPIENT:-${SMTP_FROM_EMAIL}}
       Email__FromName: ${SMTP_FROM_NAME:-Ventagram}
       Email__UseSsl: ${SMTP_USE_SSL:-true}
       Map__StyleUrl: ${MAP_STYLE_URL}

@@ -1,14 +1,14 @@
 @page
 @model Ventagram.Pages.Publications.DeleteAnonymousModel
 @{
-    ViewData["Title"] = "Dar de baja";
+    ViewData["Title"] = "Eliminar anuncio";
 }
 
 <section class="form-shell narrow">
     <div class="section-heading">
-        <span class="eyebrow">Anuncio anónimo</span>
-        <h1>Dar de baja un anuncio</h1>
-        <p>Ingresá el ID y la contraseña que se generó al crear el aviso.</p>
+        <span class="eyebrow">Anuncio anonimo</span>
+        <h1>Eliminar definitivamente un anuncio</h1>
+        <p>Ingresa el ID y la contrasena que se genero al crear el aviso. Esta accion borra tambien sus imagenes y video.</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
@@ -20,10 +20,10 @@
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
         <div class="form-grid">
             <label><span>ID anuncio</span><input asp-for="Input.PublicationId" type="number" /></label>
-            <label><span>Contraseña</span><input asp-for="Input.Password" /></label>
+            <label><span>Contrasena</span><input asp-for="Input.Password" /></label>
         </div>
         <div class="hero-actions">
-            <button type="submit" class="primary-pill">Dar de baja</button>
+            <button type="submit" class="danger-pill">Eliminar definitivamente</button>
             <a class="ghost-pill" asp-page="/Index">Volver</a>
         </div>
     </form>

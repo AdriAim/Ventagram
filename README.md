@@ -176,6 +176,15 @@ dotnet build E:\Proyectos\ventagram\Ventagram.csproj
 dotnet run --project E:\Proyectos\ventagram\Ventagram.csproj --urls http://127.0.0.1:5099
 ```
 
+### Debug local con chat
+
+El chat no vive dentro de `Ventagram.Web`. Para que funcione en local hay que iniciar los dos proyectos:
+
+- `Ventagram.Web` en `https://localhost:7048`
+- `Ventagram.ChatService` en `https://localhost:7065`
+
+Si solo se ejecuta `Ventagram.Web`, las acciones del chat van a fallar porque el frontend intenta llamar a `https://localhost:7065/api/chat/...`.
+
 ## Estado Git
 
 `E:\Proyectos\ventagram` hoy no es un repositorio Git. Por eso:

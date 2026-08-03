@@ -270,7 +270,7 @@ public class ChatAppService(ChatDbContext db, VentagramLookupDbContext lookupDb,
                     ConversationId = x.Id,
                     PublicationId = x.PublicationId,
                     PublicationTitle = publication?.Title ?? "Publicacion",
-                    PublicationPrice = publication is null ? string.Empty : $"{publication.Currency} {publication.Price:N0}",
+                    PublicationPrice = publication is null ? string.Empty : $"{publication.Currency} {publication.Price:0}",
                     PublicationLocality = publication?.Locality ?? string.Empty,
                     PublicationImageUrl = publication?.MediaItems
                         .OrderBy(m => m.SortOrder)
@@ -322,7 +322,7 @@ public class ChatAppService(ChatDbContext db, VentagramLookupDbContext lookupDb,
             ConversationId = conversation.Id,
             PublicationId = publication?.Id ?? conversation.PublicationId,
             PublicationTitle = publication?.Title ?? "Publicacion",
-            PublicationPrice = publication is null ? string.Empty : $"{publication.Currency} {publication.Price:N0}",
+            PublicationPrice = publication is null ? string.Empty : $"{publication.Currency} {publication.Price:0}",
             PublicationLocality = publication?.Locality ?? string.Empty,
             PublicationImageUrl = publication?.MediaItems
                 .OrderBy(x => x.SortOrder)

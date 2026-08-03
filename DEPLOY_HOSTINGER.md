@@ -52,6 +52,10 @@ nano .env
 - `VENTAGRAM_WEB_BASE_URL`
 - `VENTAGRAM_WEB_BASE_URL_ALT`
 - `VENTAGRAM_CHAT_BASE_URL`
+- `SMTP_HOST`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
 - `MAP_STYLE_URL` o `MAP_TILES_URL_TEMPLATE`
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
@@ -62,6 +66,7 @@ Opcionales para búsqueda de direcciones:
 
 - `MAP_GEOCODING_SEARCH_URL_TEMPLATE`
 - `MAP_REVERSE_GEOCODING_URL_TEMPLATE`
+- `SMTP_CONTACT_RECIPIENT` si quieres que el formulario de contacto llegue a otra casilla distinta del remitente general
 
 6. Levanta el stack:
 
